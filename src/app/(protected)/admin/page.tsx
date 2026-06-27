@@ -9,6 +9,7 @@ export default async function AdminPage() {
   const links = [
     { href: "/admin/players", label: "Players", desc: "Manage the player roster" },
     { href: "/admin/events",  label: "Events",  desc: "Create and manage events, teams, and rosters" },
+    { href: "/admin/courses", label: "Courses", desc: "Manage courses, tees, and hole data" },
   ];
 
   return (

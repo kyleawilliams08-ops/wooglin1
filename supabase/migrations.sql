@@ -238,3 +238,105 @@ begin
   );
 end;
 $$;
+
+-- ============================================================
+-- Milestone 4: courses, course_tees, holes
+-- ============================================================
+
+create table if not exists courses (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  location   text,
+  created_at timestamptz not null default now()
+);
+
+alter table courses enable row level security;
+drop policy if exists "authenticated users can read courses" on courses;
+drop policy if exists "admins can manage courses" on courses;
+create policy "authenticated users can read courses" on courses for select to authenticated using (true);
+create policy "admins can manage courses" on courses for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+create table if not exists course_tees (
+  id        uuid primary key default gen_random_uuid(),
+  course_id uuid not null references courses(id) on delete cascade,
+  tee_name  text not null,
+  rating    numeric(4,1) not null,
+  slope     integer not null,
+  par       integer not null
+);
+
+alter table course_tees enable row level security;
+drop policy if exists "authenticated users can read tees" on course_tees;
+drop policy if exists "admins can manage tees" on course_tees;
+create policy "authenticated users can read tees" on course_tees for select to authenticated using (true);
+create policy "admins can manage tees" on course_tees for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+create table if not exists holes (
+  id             uuid primary key default gen_random_uuid(),
+  course_tee_id  uuid not null references course_tees(id) on delete cascade,
+  hole_number    integer not null check (hole_number between 1 and 18),
+  par            integer not null,
+  stroke_index   integer not null check (stroke_index between 1 and 18),
+  unique (course_tee_id, hole_number)
+);
+
+alter table holes enable row level security;
+drop policy if exists "authenticated users can read holes" on holes;
+drop policy if exists "admins can manage holes" on holes;
+create policy "authenticated users can read holes" on holes for select to authenticated using (true);
+create policy "admins can manage holes" on holes for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
+-- SEED: 3 courses (idempotent)
+-- ============================================================
+do $$
+declare
+  v_mid_pines uuid; v_pine_wild uuid; v_tobacco uuid;
+  v_mp_blue   uuid; v_pw_blue   uuid; v_tr_disc  uuid;
+begin
+  -- Mid Pines
+  insert into courses (name, location) values ('Mid Pines Inn & Golf Club', 'Southern Pines, NC') on conflict do nothing;
+  select id into v_mid_pines from courses where name = 'Mid Pines Inn & Golf Club';
+  delete from course_tees where course_id = v_mid_pines and tee_name = 'Blue';
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_mid_pines, 'Blue', 72.9, 138, 72) returning id into v_mp_blue;
+  insert into holes (course_tee_id, hole_number, par, stroke_index) values
+    (v_mp_blue,  1, 4,  7),(v_mp_blue,  2, 5, 11),(v_mp_blue,  3, 3, 17),
+    (v_mp_blue,  4, 4,  1),(v_mp_blue,  5, 4,  5),(v_mp_blue,  6, 4, 13),
+    (v_mp_blue,  7, 3, 15),(v_mp_blue,  8, 4,  3),(v_mp_blue,  9, 5,  9),
+    (v_mp_blue, 10, 4,  8),(v_mp_blue, 11, 4,  2),(v_mp_blue, 12, 3, 18),
+    (v_mp_blue, 13, 5, 10),(v_mp_blue, 14, 4,  4),(v_mp_blue, 15, 4, 16),
+    (v_mp_blue, 16, 3, 14),(v_mp_blue, 17, 5,  6),(v_mp_blue, 18, 4, 12);
+
+  -- Pine Wild - Magnolia
+  insert into courses (name, location) values ('Pine Wild Golf Club - Magnolia', 'Pinehurst, NC') on conflict do nothing;
+  select id into v_pine_wild from courses where name = 'Pine Wild Golf Club - Magnolia';
+  delete from course_tees where course_id = v_pine_wild and tee_name = 'Blue';
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_pine_wild, 'Blue', 73.8, 134, 72) returning id into v_pw_blue;
+  insert into holes (course_tee_id, hole_number, par, stroke_index) values
+    (v_pw_blue,  1, 4,  5),(v_pw_blue,  2, 5, 13),(v_pw_blue,  3, 3, 17),
+    (v_pw_blue,  4, 4,  1),(v_pw_blue,  5, 4,  9),(v_pw_blue,  6, 4,  3),
+    (v_pw_blue,  7, 3, 15),(v_pw_blue,  8, 5, 11),(v_pw_blue,  9, 4,  7),
+    (v_pw_blue, 10, 4,  6),(v_pw_blue, 11, 3, 18),(v_pw_blue, 12, 4,  2),
+    (v_pw_blue, 13, 5, 14),(v_pw_blue, 14, 4,  4),(v_pw_blue, 15, 4, 16),
+    (v_pw_blue, 16, 3, 10),(v_pw_blue, 17, 5,  8),(v_pw_blue, 18, 4, 12);
+
+  -- Tobacco Road
+  insert into courses (name, location) values ('Tobacco Road Golf Club', 'Sanford, NC') on conflict do nothing;
+  select id into v_tobacco from courses where name = 'Tobacco Road Golf Club';
+  delete from course_tees where course_id = v_tobacco and tee_name = 'Disc';
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_tobacco, 'Disc', 70.3, 135, 71) returning id into v_tr_disc;
+  insert into holes (course_tee_id, hole_number, par, stroke_index) values
+    (v_tr_disc,  1, 4,  9),(v_tr_disc,  2, 5, 15),(v_tr_disc,  3, 3, 17),
+    (v_tr_disc,  4, 4,  1),(v_tr_disc,  5, 4,  5),(v_tr_disc,  6, 4,  7),
+    (v_tr_disc,  7, 3, 13),(v_tr_disc,  8, 4,  3),(v_tr_disc,  9, 4, 11),
+    (v_tr_disc, 10, 4,  8),(v_tr_disc, 11, 5, 16),(v_tr_disc, 12, 3, 18),
+    (v_tr_disc, 13, 4,  2),(v_tr_disc, 14, 4,  4),(v_tr_disc, 15, 3, 14),
+    (v_tr_disc, 16, 5, 10),(v_tr_disc, 17, 4,  6),(v_tr_disc, 18, 4, 12);
+end;
+$$;
