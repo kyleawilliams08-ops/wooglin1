@@ -21,7 +21,8 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const { data: participantCounts } = await supabase
     .from("event_participants")
     .select("team_id")
-    .eq("event_id", params.id);
+    .eq("event_id", params.id)
+;
 
   const countByTeam = (participantCounts ?? []).reduce<Record<string, number>>((acc, ep) => {
     if (ep.team_id) acc[ep.team_id] = (acc[ep.team_id] ?? 0) + 1;
@@ -140,7 +141,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
       </div>
 
       {/* Delete event */}
-      <form action={deleteEvent} onSubmit={(e) => { if (!confirm("Delete this event and all its data?")) e.preventDefault(); }}>
+      <form action={deleteEvent}>
         <input type="hidden" name="id" value={event.id} />
         <button type="submit" className="text-sm text-usa-red hover:underline">
           Delete event
