@@ -44,60 +44,53 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
 
             {/* Edit form */}
             {isEditing && (
-              <form
-                action={async (fd) => { await updatePlayer(fd); setEditingId(null); }}
-                className="space-y-2 pt-1 border-t border-hairline"
-              >
-                <input type="hidden" name="id" value={p.id} />
-                <input
-                  name="name"
-                  required
-                  defaultValue={p.name}
-                  placeholder="Full name"
-                  className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
-                />
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  defaultValue={p.email}
-                  placeholder="Email"
-                  className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
-                />
-                <input
-                  name="index"
-                  type="number"
-                  step="0.1"
-                  defaultValue={p.current_index ?? ""}
-                  placeholder="USGA Index"
-                  className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
-                />
-                <select
-                  name="role"
-                  defaultValue={p.role}
-                  className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy bg-white"
-                >
-                  <option value="player">Player</option>
-                  <option value="captain">Captain</option>
-                  <option value="assistant">Assistant</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button
-                  type="submit"
-                  className="w-full rounded-lg bg-navy py-1.5 text-sm font-semibold text-off-white"
-                >
-                  Save
-                </button>
-              </form>
-              <form action={deletePlayer}>
-                <input type="hidden" name="id" value={p.id} />
-                <button
-                  type="submit"
-                  className="w-full rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors"
-                >
-                  Delete player
-                </button>
-              </form>
+              <div className="space-y-2 pt-1 border-t border-hairline">
+                <form action={updatePlayer} onSubmit={() => setEditingId(null)} className="space-y-2">
+                  <input type="hidden" name="id" value={p.id} />
+                  <input
+                    name="name"
+                    required
+                    defaultValue={p.name}
+                    placeholder="Full name"
+                    className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
+                  />
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    defaultValue={p.email}
+                    placeholder="Email"
+                    className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
+                  />
+                  <input
+                    name="index"
+                    type="number"
+                    step="0.1"
+                    defaultValue={p.current_index ?? ""}
+                    placeholder="USGA Index"
+                    className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
+                  />
+                  <select
+                    name="role"
+                    defaultValue={p.role}
+                    className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy bg-white"
+                  >
+                    <option value="player">Player</option>
+                    <option value="captain">Captain</option>
+                    <option value="assistant">Assistant</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button type="submit" className="w-full rounded-lg bg-navy py-1.5 text-sm font-semibold text-off-white">
+                    Save
+                  </button>
+                </form>
+                <form action={deletePlayer}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <button type="submit" className="w-full rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors">
+                    Delete player
+                  </button>
+                </form>
+              </div>
             )}
           </li>
         );
