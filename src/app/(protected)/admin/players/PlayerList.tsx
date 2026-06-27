@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DeleteButton } from "@/components/DeleteButton";
 
 interface Player {
   id: string;
@@ -84,12 +85,13 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                     Save
                   </button>
                 </form>
-                <form action={deletePlayer}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <button type="submit" className="w-full rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors">
-                    Delete player
-                  </button>
-                </form>
+                <DeleteButton
+                  action={deletePlayer}
+                  fields={{ id: p.id }}
+                  confirm={`Delete ${p.name}? This cannot be undone.`}
+                  label="Delete player"
+                  className="w-full rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors"
+                />
               </div>
             )}
           </li>

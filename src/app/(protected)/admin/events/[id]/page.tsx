@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { DeleteButton } from "@/components/DeleteButton";
 
 export default async function EventDetailPage({ params }: { params: { id: string } }) {
   const player = await requirePlayer();
@@ -115,10 +116,13 @@ export default async function EventDetailPage({ params }: { params: { id: string
                   className="text-sm text-navy/60 hover:text-navy">
                   Manage roster ›
                 </Link>
-                <form action={deleteTeam}>
-                  <input type="hidden" name="team_id" value={team.id} />
-                  <button type="submit" className="text-xs text-usa-red hover:underline">Delete</button>
-                </form>
+                <DeleteButton
+                  action={deleteTeam}
+                  fields={{ team_id: team.id }}
+                  confirm={`Delete team "${team.name}" and all its roster data?`}
+                  label="Delete"
+                  className="text-xs text-usa-red hover:underline"
+                />
               </div>
             </div>
           );
@@ -141,12 +145,13 @@ export default async function EventDetailPage({ params }: { params: { id: string
       </div>
 
       {/* Delete event */}
-      <form action={deleteEvent}>
-        <input type="hidden" name="id" value={event.id} />
-        <button type="submit" className="text-sm text-usa-red hover:underline">
-          Delete event
-        </button>
-      </form>
+      <DeleteButton
+        action={deleteEvent}
+        fields={{ id: event.id }}
+        confirm={`Delete "${event.name}" and all its teams, rosters, and match data? This cannot be undone.`}
+        label="Delete event"
+        className="text-sm text-usa-red hover:underline"
+      />
     </div>
   );
 }

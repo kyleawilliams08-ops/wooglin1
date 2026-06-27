@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { DeleteButton } from "@/components/DeleteButton";
 
 export default async function TeamRosterPage({ params }: { params: { id: string; teamId: string } }) {
   const player = await requirePlayer();
@@ -99,10 +100,13 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
                     {ep.is_captain ? "Uncap" : "Cap"}
                   </button>
                 </form>
-                <form action={removePlayer}>
-                  <input type="hidden" name="ep_id" value={ep.id} />
-                  <button type="submit" className="text-xs text-usa-red hover:underline">Remove</button>
-                </form>
+                <DeleteButton
+                  action={removePlayer}
+                  fields={{ ep_id: ep.id }}
+                  confirm={`Remove ${ep.display_name} from this team?`}
+                  label="Remove"
+                  className="text-xs text-usa-red hover:underline"
+                />
               </div>
             </div>
           );
