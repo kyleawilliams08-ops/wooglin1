@@ -7,9 +7,8 @@ export default async function AdminPage() {
   if (!isAdmin(player)) redirect("/");
 
   const links = [
-    { href: "/admin/players", label: "Players",  desc: "Manage the player roster" },
-    { href: "/admin/events",  label: "Events",   desc: "Create and manage events" },
-    { href: "/admin/teams",   label: "Teams",    desc: "Manage teams and rosters" },
+    { href: "/admin/players", label: "Players", desc: "Manage the player roster" },
+    { href: "/admin/events",  label: "Events",  desc: "Create and manage events, teams, and rosters" },
   ];
 
   return (
