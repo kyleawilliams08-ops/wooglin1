@@ -15,8 +15,18 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
   const { data: teams } = await supabase
     .from("teams")
-    .select("*, event_participants(count)")
+    .select("*")
     .eq("event_id", params.id);
+
+  const { data: participantCounts } = await supabase
+    .from("event_participants")
+    .select("team_id")
+    .eq("event_id", params.id);
+
+  const countByTeam = (participantCounts ?? []).reduce<Record<string, number>>((acc, ep) => {
+    if (ep.team_id) acc[ep.team_id] = (acc[ep.team_id] ?? 0) + 1;
+    return acc;
+  }, {});
 
   async function updateEvent(formData: FormData) {
     "use server";
@@ -89,7 +99,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
       <div className="space-y-3">
         <p className="font-semibold text-navy">Teams</p>
         {teams?.map((team) => {
-          const count = (team.event_participants as { count: number }[])?.[0]?.count ?? 0;
+          const count = countByTeam[team.id] ?? 0;
           return (
             <div key={team.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
               <div className="flex items-center gap-3">
