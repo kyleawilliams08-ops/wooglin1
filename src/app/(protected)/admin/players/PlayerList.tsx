@@ -82,23 +82,21 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                   <option value="assistant">Assistant</option>
                   <option value="admin">Admin</option>
                 </select>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 rounded-lg bg-navy py-1.5 text-sm font-semibold text-off-white"
-                  >
-                    Save
-                  </button>
-                  <form action={deletePlayer}>
-                    <input type="hidden" name="id" value={p.id} />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </form>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-navy py-1.5 text-sm font-semibold text-off-white"
+                >
+                  Save
+                </button>
+              </form>
+              <form action={deletePlayer}>
+                <input type="hidden" name="id" value={p.id} />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg border border-usa-red px-3 py-1.5 text-sm text-usa-red hover:bg-usa-red hover:text-white transition-colors"
+                >
+                  Delete player
+                </button>
               </form>
             )}
           </li>
