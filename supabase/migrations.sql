@@ -482,3 +482,27 @@ alter table matchups add column if not exists tee_time time;
 
 -- Milestone 8c: match_score on matchups
 alter table matchups add column if not exists match_score text;
+
+-- ============================================================
+-- Milestone 9: hole_scores
+-- ============================================================
+
+create table if not exists hole_scores (
+  id             uuid primary key default gen_random_uuid(),
+  matchup_id     uuid not null references matchups(id) on delete cascade,
+  hole_number    int not null,
+  home_p1_gross  int,
+  home_p2_gross  int,
+  away_p1_gross  int,
+  away_p2_gross  int,
+  unique (matchup_id, hole_number),
+  created_at     timestamptz not null default now()
+);
+
+alter table hole_scores enable row level security;
+drop policy if exists "authenticated users can read hole_scores" on hole_scores;
+drop policy if exists "admins can manage hole_scores" on hole_scores;
+create policy "authenticated users can read hole_scores" on hole_scores for select to authenticated using (true);
+create policy "admins can manage hole_scores" on hole_scores for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
