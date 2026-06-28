@@ -369,6 +369,26 @@ create policy "admins can manage rounds" on rounds for all to authenticated
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
 
 -- ============================================================
+-- Milestone 7b: participant_handicaps
+-- ============================================================
+create table if not exists participant_handicaps (
+  id              uuid primary key default gen_random_uuid(),
+  event_id        uuid not null references events(id) on delete cascade,
+  player_id       uuid not null references players(id) on delete cascade,
+  course_tee_id   uuid not null references course_tees(id) on delete cascade,
+  calculated_hcp  integer,
+  override_hcp    integer,
+  unique (event_id, player_id, course_tee_id)
+);
+alter table participant_handicaps enable row level security;
+drop policy if exists "authenticated users can read participant_handicaps" on participant_handicaps;
+drop policy if exists "admins can manage participant_handicaps" on participant_handicaps;
+create policy "authenticated users can read participant_handicaps" on participant_handicaps for select to authenticated using (true);
+create policy "admins can manage participant_handicaps" on participant_handicaps for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
 -- SEED: 3 courses (idempotent)
 -- ============================================================
 do $$
