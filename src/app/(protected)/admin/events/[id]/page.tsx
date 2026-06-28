@@ -23,7 +23,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
     .from("event_courses")
     .select("id, course_id, courses(id, name, location)")
     .eq("event_id", params.id);
-  const eventCourses = (eventCoursesRaw ?? []) as {
+  const eventCourses = (eventCoursesRaw ?? []) as unknown as {
     id: string;
     course_id: string;
     courses: { id: string; name: string; location: string | null } | null;
