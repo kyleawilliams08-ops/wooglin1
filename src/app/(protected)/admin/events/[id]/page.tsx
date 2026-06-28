@@ -19,17 +19,22 @@ export default async function EventDetailPage({ params }: { params: { id: string
     .select("*")
     .eq("event_id", params.id);
 
-  const { data: eventCourses } = await supabase
+  const { data: eventCoursesRaw } = await supabase
     .from("event_courses")
     .select("id, course_id, courses(id, name, location)")
     .eq("event_id", params.id);
+  const eventCourses = (eventCoursesRaw ?? []) as {
+    id: string;
+    course_id: string;
+    courses: { id: string; name: string; location: string | null } | null;
+  }[];
 
   const { data: allCourses } = await supabase
     .from("courses")
     .select("id, name, location")
     .order("name");
 
-  const linkedCourseIds = new Set((eventCourses ?? []).map((ec) => ec.course_id));
+  const linkedCourseIds = new Set(eventCourses.map((ec) => ec.course_id));
   const availableCourses = (allCourses ?? []).filter((c) => !linkedCourseIds.has(c.id));
 
   const { data: participantCounts } = await supabase
@@ -130,10 +135,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
       {/* Courses */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Courses</p>
-        {(eventCourses ?? []).length === 0 && (
+        {eventCourses.length === 0 && (
           <p className="text-sm text-navy/40">No courses added yet.</p>
         )}
-        {(eventCourses ?? []).map((ec) => {
+        {eventCourses.map((ec) => {
           const course = ec.courses as { id: string; name: string; location: string | null } | null;
           return (
             <div key={ec.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
