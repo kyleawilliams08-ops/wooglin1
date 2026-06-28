@@ -23,11 +23,13 @@ create table if not exists players (
   email           text unique not null,
   avatar_url      text,
   current_index   numeric(4,1),
+  hcp_allowance   integer not null default 100 check (hcp_allowance between 0 and 100),
   ghin_id         text,
   role            player_role not null default 'player',
   created_at      timestamptz not null default now()
 );
 
+alter table players add column if not exists hcp_allowance integer not null default 100 check (hcp_allowance between 0 and 100);
 create index if not exists players_auth_user_id_idx on players(auth_user_id);
 create index if not exists players_email_idx on players(email);
 alter table players enable row level security;
