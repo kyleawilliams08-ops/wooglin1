@@ -312,30 +312,33 @@ create policy "admins can manage event_courses" on event_courses for all to auth
 -- Milestone 5: formats
 -- ============================================================
 create table if not exists formats (
-  id             uuid primary key default gen_random_uuid(),
-  name           text not null unique,
-  description    text,
-  team_size      integer,  -- null = singles
-  hcp_allowance  integer not null default 100 check (hcp_allowance between 0 and 100),
-  sort_order     integer not null default 0
+  id                      uuid primary key default gen_random_uuid(),
+  name                    text not null unique,
+  description             text,
+  team_size               integer,  -- null = singles
+  hcp_allowance           integer not null default 100 check (hcp_allowance between 0 and 100),
+  hcp_allowance_secondary integer check (hcp_allowance_secondary between 0 and 100),  -- used for high-hdcp player in scramble
+  sort_order              integer not null default 0
 );
 alter table formats add column if not exists hcp_allowance integer not null default 100 check (hcp_allowance between 0 and 100);
+alter table formats add column if not exists hcp_allowance_secondary integer check (hcp_allowance_secondary between 0 and 100);
 
 alter table formats enable row level security;
 drop policy if exists "authenticated users can read formats" on formats;
 create policy "authenticated users can read formats" on formats for select to authenticated using (true);
 
-insert into formats (name, description, team_size, hcp_allowance, sort_order) values
-  ('Best Ball',  'Each player plays their own ball; best score on the hole counts for the team.',  2, 85, 1),
-  ('Shamble',    'Team drives from the best tee shot, then each player plays their own ball in.',  2, 70, 2),
-  ('Pinehurst',  'Partners alternate shots after driving; one ball per team.',                     2, 50, 3),
-  ('Scramble',   'All players hit from the best shot each time.',                                  2, 25, 4),
-  ('Singles',    'One-on-one match play.',                                                         1, 90, 5)
+insert into formats (name, description, team_size, hcp_allowance, hcp_allowance_secondary, sort_order) values
+  ('Best Ball', '2-man best ball. Each player plays their own ball; best net score on each hole counts.',                                                   2, 100, null, 1),
+  ('Shamble',   'Each player hits a tee shot. Best drive selected; each plays their own ball in. Best net score counts. Must use 1 drive from each player.', 2,  70, null, 2),
+  ('Pinehurst', 'Each player hits a tee shot, then switches balls for the second shot. Team selects the best ball and alternates shots into the hole.',      2,  50, null, 3),
+  ('Scramble',  '2-man scramble. Must use 2 drives from each player. Low handicap player: 35% allowance; high handicap player: 15% allowance.',             2,  35,   15, 4),
+  ('Singles',   'One-on-one match play.',                                                                                                                    1, 100, null, 5)
 on conflict (name) do update set
-  description   = excluded.description,
-  team_size     = excluded.team_size,
-  hcp_allowance = excluded.hcp_allowance,
-  sort_order    = excluded.sort_order;
+  description             = excluded.description,
+  team_size               = excluded.team_size,
+  hcp_allowance           = excluded.hcp_allowance,
+  hcp_allowance_secondary = excluded.hcp_allowance_secondary,
+  sort_order              = excluded.sort_order;
 
 -- ============================================================
 -- SEED: 3 courses (idempotent)
