@@ -222,8 +222,7 @@ export function shamble2v1GroupHandicaps(
 
 /**
  * Scramble 2v1 — solo player hits for both positions.
- * Treated as the low player only (35% allowance); no second player to
- * contribute the 15%. Their team handicap is just this single value.
+ * Gets 35% (low) + 15% (high) of their own handicap = 50% total.
  * Pass to teamHandicap/twoTeamHandicaps as normal.
  */
 export function scramble2v1SoloHandicap(
@@ -231,5 +230,5 @@ export function scramble2v1SoloHandicap(
   tee: Tee,
   nineHole = false,
 ): number {
-  return playingHandicap(courseHandicap(index, tee), 35, nineHole);
+  return playingHandicap(courseHandicap(index, tee), 50, nineHole);
 }
