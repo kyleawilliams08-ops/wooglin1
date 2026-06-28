@@ -266,11 +266,17 @@ create table if not exists course_tees (
   id        uuid primary key default gen_random_uuid(),
   course_id uuid not null references courses(id) on delete cascade,
   tee_name  text not null,
+  unique (course_id, tee_name),
   rating    numeric(4,1) not null,
   slope     integer not null,
   par       integer not null
 );
 
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'course_tees_course_id_tee_name_key') then
+    alter table course_tees add constraint course_tees_course_id_tee_name_key unique (course_id, tee_name);
+  end if;
+end $$;
 alter table course_tees enable row level security;
 drop policy if exists "authenticated users can read tees" on course_tees;
 drop policy if exists "admins can manage tees" on course_tees;
@@ -399,40 +405,46 @@ begin
   -- Mid Pines
   insert into courses (name, location) values ('Mid Pines Inn & Golf Club', 'Southern Pines, NC') on conflict (name) do nothing;
   select id into v_mid_pines from courses where name = 'Mid Pines Inn & Golf Club';
-  delete from course_tees where course_id = v_mid_pines and tee_name = 'Blue';
-  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_mid_pines, 'Blue', 72.9, 138, 72) returning id into v_mp_blue;
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_mid_pines, 'Blue', 72.9, 138, 72)
+    on conflict (course_id, tee_name) do update set rating = excluded.rating, slope = excluded.slope, par = excluded.par
+    returning id into v_mp_blue;
   insert into holes (course_tee_id, hole_number, par, stroke_index) values
     (v_mp_blue,  1, 4,  7),(v_mp_blue,  2, 5, 11),(v_mp_blue,  3, 3, 17),
     (v_mp_blue,  4, 4,  1),(v_mp_blue,  5, 4,  5),(v_mp_blue,  6, 4, 13),
     (v_mp_blue,  7, 3, 15),(v_mp_blue,  8, 4,  3),(v_mp_blue,  9, 5,  9),
     (v_mp_blue, 10, 4,  8),(v_mp_blue, 11, 4,  2),(v_mp_blue, 12, 3, 18),
     (v_mp_blue, 13, 5, 10),(v_mp_blue, 14, 4,  4),(v_mp_blue, 15, 4, 16),
-    (v_mp_blue, 16, 3, 14),(v_mp_blue, 17, 5,  6),(v_mp_blue, 18, 4, 12);
+    (v_mp_blue, 16, 3, 14),(v_mp_blue, 17, 5,  6),(v_mp_blue, 18, 4, 12)
+    on conflict (course_tee_id, hole_number) do update set par = excluded.par, stroke_index = excluded.stroke_index;
 
   -- Pine Wild - Magnolia
   insert into courses (name, location) values ('Pine Wild Golf Club - Magnolia', 'Pinehurst, NC') on conflict (name) do nothing;
   select id into v_pine_wild from courses where name = 'Pine Wild Golf Club - Magnolia';
-  delete from course_tees where course_id = v_pine_wild and tee_name = 'Blue';
-  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_pine_wild, 'Blue', 73.8, 134, 72) returning id into v_pw_blue;
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_pine_wild, 'Blue', 73.8, 134, 72)
+    on conflict (course_id, tee_name) do update set rating = excluded.rating, slope = excluded.slope, par = excluded.par
+    returning id into v_pw_blue;
   insert into holes (course_tee_id, hole_number, par, stroke_index) values
     (v_pw_blue,  1, 4,  5),(v_pw_blue,  2, 5, 13),(v_pw_blue,  3, 3, 17),
     (v_pw_blue,  4, 4,  1),(v_pw_blue,  5, 4,  9),(v_pw_blue,  6, 4,  3),
     (v_pw_blue,  7, 3, 15),(v_pw_blue,  8, 5, 11),(v_pw_blue,  9, 4,  7),
     (v_pw_blue, 10, 4,  6),(v_pw_blue, 11, 3, 18),(v_pw_blue, 12, 4,  2),
     (v_pw_blue, 13, 5, 14),(v_pw_blue, 14, 4,  4),(v_pw_blue, 15, 4, 16),
-    (v_pw_blue, 16, 3, 10),(v_pw_blue, 17, 5,  8),(v_pw_blue, 18, 4, 12);
+    (v_pw_blue, 16, 3, 10),(v_pw_blue, 17, 5,  8),(v_pw_blue, 18, 4, 12)
+    on conflict (course_tee_id, hole_number) do update set par = excluded.par, stroke_index = excluded.stroke_index;
 
   -- Tobacco Road
   insert into courses (name, location) values ('Tobacco Road Golf Club', 'Sanford, NC') on conflict (name) do nothing;
   select id into v_tobacco from courses where name = 'Tobacco Road Golf Club';
-  delete from course_tees where course_id = v_tobacco and tee_name = 'Disc';
-  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_tobacco, 'Disc', 70.3, 135, 71) returning id into v_tr_disc;
+  insert into course_tees (course_id, tee_name, rating, slope, par) values (v_tobacco, 'Disc', 70.3, 135, 71)
+    on conflict (course_id, tee_name) do update set rating = excluded.rating, slope = excluded.slope, par = excluded.par
+    returning id into v_tr_disc;
   insert into holes (course_tee_id, hole_number, par, stroke_index) values
     (v_tr_disc,  1, 5,  3),(v_tr_disc,  2, 4, 11),(v_tr_disc,  3, 3, 17),
     (v_tr_disc,  4, 5,  9),(v_tr_disc,  5, 4, 15),(v_tr_disc,  6, 3, 13),
     (v_tr_disc,  7, 4,  7),(v_tr_disc,  8, 3,  5),(v_tr_disc,  9, 4,  1),
     (v_tr_disc, 10, 4,  6),(v_tr_disc, 11, 5, 10),(v_tr_disc, 12, 4, 14),
     (v_tr_disc, 13, 5,  2),(v_tr_disc, 14, 3,  8),(v_tr_disc, 15, 4, 12),
-    (v_tr_disc, 16, 4, 16),(v_tr_disc, 17, 3, 18),(v_tr_disc, 18, 3,  4);
+    (v_tr_disc, 16, 4, 16),(v_tr_disc, 17, 3, 18),(v_tr_disc, 18, 3,  4)
+    on conflict (course_tee_id, hole_number) do update set par = excluded.par, stroke_index = excluded.stroke_index;
 end;
 $$;
