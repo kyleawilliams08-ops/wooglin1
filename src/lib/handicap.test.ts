@@ -5,6 +5,8 @@ import {
   playingHandicap,
   strokesGivenOnHole,
   netScore,
+  normalizeToLowest,
+  groupHandicaps,
   scrambleHandicaps,
   partnerHandicaps,
   singlesHandicaps,
@@ -183,6 +185,35 @@ describe("scrambleHandicaps", () => {
     const r = scrambleHandicaps(8.0, 14.7, midPinesBlue, scramble, true);
     // 11/2=5.5 × 35% = 1.925 → 2.0
     expect(r.lowPlayingHcp).toBe(2.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeToLowest / groupHandicaps (Best Ball 4-player example)
+// ---------------------------------------------------------------------------
+describe("normalizeToLowest", () => {
+  it("matches the user example: [6,7,4,10] → [2,3,0,6]", () => {
+    expect(normalizeToLowest([6, 7, 4, 10])).toEqual([2, 3, 0, 6]);
+  });
+
+  it("lowest player always gets 0", () => {
+    const result = normalizeToLowest([10, 4, 8, 6]);
+    expect(Math.min(...result)).toBe(0);
+  });
+
+  it("works for 2 players (same as singles)", () => {
+    expect(normalizeToLowest([11, 19])).toEqual([0, 8]);
+  });
+});
+
+describe("groupHandicaps (Best Ball)", () => {
+  it("produces the user example after Best Ball 100% allowance", () => {
+    // Suppose course handicaps come out to [6,7,4,10] after 100% allowance
+    // Use indexes that produce those course hcps on a flat tee
+    const flatTee = { rating: 72, slope: 113, par: 72 }; // slope=113 → index = courseHcp exactly
+    const bestBall = { hcp_allowance: 100 };
+    const result = groupHandicaps([6, 7, 4, 10], flatTee, bestBall);
+    expect(result).toEqual([2, 3, 0, 6]);
   });
 });
 

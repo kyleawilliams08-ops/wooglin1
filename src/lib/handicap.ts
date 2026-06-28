@@ -111,8 +111,36 @@ export function partnerHandicaps(
 }
 
 /**
- * Singles match play: difference-based. Lower-hcp player gets 0; higher gets the diff.
- * Pass the result directly into strokesGivenOnHole for each hole.
+ * Normalize an array of playing handicaps so the lowest becomes 0 and
+ * everyone else receives the difference. Works for any group size.
+ *
+ * Used by Best Ball (4-player group) and Singles (2-player group):
+ *   [6, 7, 4, 10] → [2, 3, 0, 6]
+ */
+export function normalizeToLowest(playingHcps: number[]): number[] {
+  const low = Math.min(...playingHcps);
+  return playingHcps.map((h) => roundToHalf(h - low));
+}
+
+/**
+ * Best Ball (or any format): calculate playing handicaps for a group then
+ * normalize so the lowest player gets 0 strokes.
+ */
+export function groupHandicaps(
+  indexes: number[],
+  tee: Tee,
+  format: Format,
+  nineHole = false,
+): number[] {
+  const playing = indexes.map((idx) =>
+    playingHandicap(courseHandicap(idx, tee), format.hcp_allowance, nineHole)
+  );
+  return normalizeToLowest(playing);
+}
+
+/**
+ * Singles match play: convenience wrapper around groupHandicaps for 2 players.
+ * Lower-hcp player gets 0; higher gets the diff.
  */
 export function singlesHandicaps(
   indexA: number,
@@ -121,11 +149,6 @@ export function singlesHandicaps(
   format: Format,
   nineHole = false,
 ): { hcpA: number; hcpB: number } {
-  const rawA = playingHandicap(courseHandicap(indexA, tee), format.hcp_allowance, nineHole);
-  const rawB = playingHandicap(courseHandicap(indexB, tee), format.hcp_allowance, nineHole);
-  const low = Math.min(rawA, rawB);
-  return {
-    hcpA: rawA - low,
-    hcpB: rawB - low,
-  };
+  const [hcpA, hcpB] = groupHandicaps([indexA, indexB], tee, format, nineHole);
+  return { hcpA, hcpB };
 }
