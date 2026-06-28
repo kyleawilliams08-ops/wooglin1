@@ -293,6 +293,23 @@ create policy "admins can manage holes" on holes for all to authenticated
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
 
 -- ============================================================
+-- EVENT_COURSES (join: which courses are played at each event)
+-- ============================================================
+create table if not exists event_courses (
+  id         uuid primary key default gen_random_uuid(),
+  event_id   uuid not null references events(id) on delete cascade,
+  course_id  uuid not null references courses(id) on delete cascade,
+  unique (event_id, course_id)
+);
+alter table event_courses enable row level security;
+drop policy if exists "authenticated users can read event_courses" on event_courses;
+drop policy if exists "admins can manage event_courses" on event_courses;
+create policy "authenticated users can read event_courses" on event_courses for select to authenticated using (true);
+create policy "admins can manage event_courses" on event_courses for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
 -- SEED: 3 courses (idempotent)
 -- ============================================================
 do $$
@@ -332,11 +349,11 @@ begin
   delete from course_tees where course_id = v_tobacco and tee_name = 'Disc';
   insert into course_tees (course_id, tee_name, rating, slope, par) values (v_tobacco, 'Disc', 70.3, 135, 71) returning id into v_tr_disc;
   insert into holes (course_tee_id, hole_number, par, stroke_index) values
-    (v_tr_disc,  1, 4,  9),(v_tr_disc,  2, 5, 15),(v_tr_disc,  3, 3, 17),
-    (v_tr_disc,  4, 4,  1),(v_tr_disc,  5, 4,  5),(v_tr_disc,  6, 4,  7),
-    (v_tr_disc,  7, 3, 13),(v_tr_disc,  8, 4,  3),(v_tr_disc,  9, 4, 11),
-    (v_tr_disc, 10, 4,  8),(v_tr_disc, 11, 5, 16),(v_tr_disc, 12, 3, 18),
-    (v_tr_disc, 13, 4,  2),(v_tr_disc, 14, 4,  4),(v_tr_disc, 15, 3, 14),
-    (v_tr_disc, 16, 5, 10),(v_tr_disc, 17, 4,  6),(v_tr_disc, 18, 4, 12);
+    (v_tr_disc,  1, 5,  3),(v_tr_disc,  2, 4, 11),(v_tr_disc,  3, 3, 17),
+    (v_tr_disc,  4, 5,  9),(v_tr_disc,  5, 4, 15),(v_tr_disc,  6, 3, 13),
+    (v_tr_disc,  7, 4,  7),(v_tr_disc,  8, 3,  5),(v_tr_disc,  9, 4,  1),
+    (v_tr_disc, 10, 4,  6),(v_tr_disc, 11, 5, 10),(v_tr_disc, 12, 4, 14),
+    (v_tr_disc, 13, 5,  2),(v_tr_disc, 14, 3,  8),(v_tr_disc, 15, 4, 12),
+    (v_tr_disc, 16, 4, 16),(v_tr_disc, 17, 3, 18),(v_tr_disc, 18, 3,  4);
 end;
 $$;

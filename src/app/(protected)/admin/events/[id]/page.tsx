@@ -19,6 +19,19 @@ export default async function EventDetailPage({ params }: { params: { id: string
     .select("*")
     .eq("event_id", params.id);
 
+  const { data: eventCourses } = await supabase
+    .from("event_courses")
+    .select("id, course_id, courses(id, name, location)")
+    .eq("event_id", params.id);
+
+  const { data: allCourses } = await supabase
+    .from("courses")
+    .select("id, name, location")
+    .order("name");
+
+  const linkedCourseIds = new Set((eventCourses ?? []).map((ec) => ec.course_id));
+  const availableCourses = (allCourses ?? []).filter((c) => !linkedCourseIds.has(c.id));
+
   const { data: participantCounts } = await supabase
     .from("event_participants")
     .select("team_id")
@@ -68,6 +81,23 @@ export default async function EventDetailPage({ params }: { params: { id: string
     revalidatePath(`/admin/events/${params.id}`);
   }
 
+  async function addEventCourse(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("event_courses").insert({
+      event_id:  params.id,
+      course_id: formData.get("course_id") as string,
+    });
+    revalidatePath(`/admin/events/${params.id}`);
+  }
+
+  async function removeEventCourse(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("event_courses").delete().eq("id", formData.get("event_course_id") as string);
+    revalidatePath(`/admin/events/${params.id}`);
+  }
+
   return (
     <div className="px-4 py-6 space-y-6">
       {/* Back */}
@@ -96,6 +126,46 @@ export default async function EventDetailPage({ params }: { params: { id: string
           Save Changes
         </button>
       </form>
+
+      {/* Courses */}
+      <div className="space-y-3">
+        <p className="font-semibold text-navy">Courses</p>
+        {(eventCourses ?? []).length === 0 && (
+          <p className="text-sm text-navy/40">No courses added yet.</p>
+        )}
+        {(eventCourses ?? []).map((ec) => {
+          const course = ec.courses as { id: string; name: string; location: string | null } | null;
+          return (
+            <div key={ec.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
+              <div>
+                <p className="font-semibold text-navy">{course?.name}</p>
+                {course?.location && <p className="text-xs text-navy/50">{course.location}</p>}
+              </div>
+              <DeleteButton
+                action={removeEventCourse}
+                fields={{ event_course_id: ec.id }}
+                confirm={`Remove "${course?.name}" from this event?`}
+                label="Remove"
+                className="text-xs text-usa-red hover:underline"
+              />
+            </div>
+          );
+        })}
+        {availableCourses.length > 0 && (
+          <form action={addEventCourse} className="flex gap-2">
+            <select name="course_id" required
+              className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+              <option value="">Add a course…</option>
+              {availableCourses.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button type="submit" className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-off-white">
+              Add
+            </button>
+          </form>
+        )}
+      </div>
 
       {/* Teams */}
       <div className="space-y-3">
