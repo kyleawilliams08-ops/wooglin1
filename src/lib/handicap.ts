@@ -123,8 +123,10 @@ export function normalizeToLowest(playingHcps: number[]): number[] {
 }
 
 /**
- * Best Ball (or any format): calculate playing handicaps for a group then
- * normalize so the lowest player gets 0 strokes.
+ * Best Ball / Shamble (4 balls holed):
+ * Each player's individual playing hcp is calculated, then normalized so the
+ * lowest in the group gets 0 and everyone else receives the difference.
+ * Pass all 4 indexes; order matches the returned array.
  */
 export function groupHandicaps(
   indexes: number[],
@@ -139,8 +141,8 @@ export function groupHandicaps(
 }
 
 /**
- * Singles match play: convenience wrapper around groupHandicaps for 2 players.
- * Lower-hcp player gets 0; higher gets the diff.
+ * Singles (2 balls holed):
+ * Convenience wrapper — lower-hcp player gets 0, higher gets the diff.
  */
 export function singlesHandicaps(
   indexA: number,
@@ -151,4 +153,32 @@ export function singlesHandicaps(
 ): { hcpA: number; hcpB: number } {
   const [hcpA, hcpB] = groupHandicaps([indexA, indexB], tee, format, nineHole);
   return { hcpA, hcpB };
+}
+
+/**
+ * Pinehurst / Scramble (1 ball holed):
+ * Each team's handicap = sum of both players' playing handicaps (rounded to 0.5).
+ * The two team totals are then normalized so the lower team gets 0 net strokes.
+ *
+ * For Scramble: low player uses hcp_allowance (35%), high player uses
+ * hcp_allowance_secondary (15%) — use scrambleHandicaps() to get the two
+ * playing hcps, then pass them here.
+ *
+ * For Pinehurst: both players use hcp_allowance (50%) — use partnerHandicaps()
+ * to get the two playing hcps, then pass them here.
+ */
+export function teamHandicap(playingHcpA: number, playingHcpB: number): number {
+  return roundToHalf(playingHcpA + playingHcpB);
+}
+
+/**
+ * Returns net strokes for each of the two teams after normalizing to lowest.
+ * teamA / teamB are the outputs of teamHandicap() for each pairing.
+ */
+export function twoTeamHandicaps(
+  teamAHcp: number,
+  teamBHcp: number,
+): { teamA: number; teamB: number } {
+  const [teamA, teamB] = normalizeToLowest([teamAHcp, teamBHcp]);
+  return { teamA, teamB };
 }

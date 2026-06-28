@@ -7,6 +7,8 @@ import {
   netScore,
   normalizeToLowest,
   groupHandicaps,
+  teamHandicap,
+  twoTeamHandicaps,
   scrambleHandicaps,
   partnerHandicaps,
   singlesHandicaps,
@@ -157,6 +159,61 @@ describe("netScore", () => {
   it("no stroke outside handicap range", () => {
     // 7-hcp player, SI 10 → no stroke
     expect(netScore(5, 7, 10)).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// teamHandicap + twoTeamHandicaps (Pinehurst / Scramble — 1 ball holed)
+// ---------------------------------------------------------------------------
+describe("teamHandicap", () => {
+  it("sums two playing hcps and rounds to 0.5", () => {
+    // Pinehurst 50%: player A courseHcp 11 → 5.5, player B courseHcp 19 → 9.5 → team = 15.0
+    expect(teamHandicap(5.5, 9.5)).toBe(15.0);
+  });
+
+  it("rounds the sum to nearest 0.5", () => {
+    // 4.0 + 3.0 = 7.0
+    expect(teamHandicap(4.0, 3.0)).toBe(7.0);
+    // 3.5 + 4.0 = 7.5
+    expect(teamHandicap(3.5, 4.0)).toBe(7.5);
+  });
+});
+
+describe("twoTeamHandicaps (Pinehurst)", () => {
+  const pinehurst = { hcp_allowance: 50 };
+
+  it("lower team gets 0 net strokes", () => {
+    // Team A: players 8.0 + 10.5 at Mid Pines Blue
+    // Team B: players 14.7 + 13.0 at Mid Pines Blue
+    const { hcpA: pA1, hcpB: pA2 } = partnerHandicaps(8.0, 10.5, midPinesBlue, pinehurst);
+    const { hcpA: pB1, hcpB: pB2 } = partnerHandicaps(14.7, 13.0, midPinesBlue, pinehurst);
+    const teamA = teamHandicap(pA1, pA2);
+    const teamB = teamHandicap(pB1, pB2);
+    const { teamA: netA, teamB: netB } = twoTeamHandicaps(teamA, teamB);
+    expect(Math.min(netA, netB)).toBe(0);
+    expect(netB).toBe(netB - netA + netA); // sanity
+    expect(netA).toBe(0); // A has lower indexes so lower team hcp
+  });
+
+  it("higher team receives the difference", () => {
+    const { teamA: netA, teamB: netB } = twoTeamHandicaps(8, 14);
+    expect(netA).toBe(0);
+    expect(netB).toBe(6);
+  });
+});
+
+describe("twoTeamHandicaps (Scramble)", () => {
+  const scramble = { hcp_allowance: 35, hcp_allowance_secondary: 15 };
+
+  it("combines scramble allowances into team totals then normalizes", () => {
+    // Team A: 8.0 + 14.7 at Mid Pines Blue
+    const rA = scrambleHandicaps(8.0, 14.7, midPinesBlue, scramble);
+    const teamAHcp = teamHandicap(rA.lowPlayingHcp, rA.highPlayingHcp);
+    // Team B: 10.5 + 12.0 at Mid Pines Blue
+    const rB = scrambleHandicaps(10.5, 12.0, midPinesBlue, scramble);
+    const teamBHcp = teamHandicap(rB.lowPlayingHcp, rB.highPlayingHcp);
+    const { teamA, teamB } = twoTeamHandicaps(teamAHcp, teamBHcp);
+    expect(Math.min(teamA, teamB)).toBe(0);
   });
 });
 
