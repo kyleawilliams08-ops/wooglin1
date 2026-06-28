@@ -46,15 +46,39 @@ export function playingHandicap(
 
 /**
  * How many strokes a player receives on a specific hole.
- * Pass the playing handicap for this player (in singles, use the difference
- * returned by singlesHandicaps; in team formats, use each player's own hcp).
- * Returns 0, 1, or 2 (double-stroke when hcp > 18).
+ * Returns 0, 0.5, 1, 1.5, or 2.
+ *
+ * Half strokes arise when playingHcp has a .5 fractional part (e.g. 3.5).
+ * The half stroke is allocated to the next-hardest hole after the full strokes.
+ * In match play a half stroke means: if you would otherwise tie, you win.
+ *
+ * For 9-hole rounds pass the re-ranked SI (1–9) not the raw 18-hole SI.
+ * Use nineHoleSIRank() to convert before calling this function.
  */
 export function strokesGivenOnHole(playingHcp: number, strokeIndex: number): number {
   if (playingHcp <= 0) return 0;
-  const full  = Math.floor(playingHcp / 18);
-  const extra = playingHcp % 18;
-  return full + (strokeIndex <= extra ? 1 : 0);
+  const full        = Math.floor(playingHcp / 18);
+  const remaining   = playingHcp % 18;
+  const fullStrokes = Math.floor(remaining);
+  const halfStroke  = remaining % 1; // 0 or 0.5
+
+  if (strokeIndex <= fullStrokes) return full + 1;
+  if (halfStroke > 0 && strokeIndex === fullStrokes + 1) return full + 0.5;
+  return full;
+}
+
+/**
+ * For 9-hole rounds, re-rank the hole SIs from 1–9 so stroke allocation
+ * uses the correct relative difficulty within the 9 holes being played.
+ * Pass the stroke_index values for all 9 holes being played.
+ *
+ * Example (front 9 Pine Wild SIs = [5,13,17,1,9,3,15,11,7]):
+ *   raw SI 1 → rank 1, SI 3 → rank 2, SI 5 → rank 3, SI 7 → rank 4, …
+ */
+export function nineHoleSIRank(rawSI: number, allHoleSIs: number[]): number {
+  const sorted = [...allHoleSIs].sort((a, b) => a - b);
+  const rank = sorted.indexOf(rawSI) + 1;
+  return rank > 0 ? rank : rawSI; // fallback to raw if not found
 }
 
 /**

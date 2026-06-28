@@ -7,6 +7,7 @@ import {
   playingHandicap,
   normalizeToLowest,
   strokesGivenOnHole,
+  nineHoleSIRank,
   teamHandicap,
   twoTeamHandicaps,
 } from "@/lib/handicap";
@@ -206,6 +207,15 @@ export default async function ScorecardPage({
   const scoreMap: Record<number, ScoreRow> = {};
   for (const s of scoresRaw ?? []) scoreMap[s.hole_number] = s;
 
+  // For 9-hole rounds, re-rank SIs 1–9 so stroke allocation is correct
+  const allHoleSIs = holes.map((h) => h.stroke_index);
+  const effectiveSI = (rawSI: number) =>
+    nineHole ? nineHoleSIRank(rawSI, allHoleSIs) : rawSI;
+
+  // Returns 0, 0.5, 1, or 2 strokes for a player on a hole
+  const strokes = (phcp: number, rawSI: number) =>
+    strokesGivenOnHole(phcp, effectiveSI(rawSI));
+
   // ── Per-hole result computation ─────────────────────────────────────────
 
   type HoleResult = "home" | "away" | "halve" | null;
@@ -218,8 +228,8 @@ export default async function ScorecardPage({
       const hGross = s.home_p1_gross;
       const aGross = s.away_p1_gross;
       if (hGross == null || aGross == null) return null;
-      const hNet = hGross - strokesGivenOnHole(homeTeamPhcp ?? 0, si);
-      const aNet = aGross - strokesGivenOnHole(awayTeamPhcp ?? 0, si);
+      const hNet = hGross - strokes(homeTeamPhcp ?? 0, si);
+      const aNet = aGross - strokes(awayTeamPhcp ?? 0, si);
       return hNet < aNet ? "home" : aNet < hNet ? "away" : "halve";
     }
 
@@ -227,20 +237,20 @@ export default async function ScorecardPage({
       const hGross = s.home_p1_gross;
       const aGross = s.away_p1_gross;
       if (hGross == null || aGross == null) return null;
-      const hNet = hGross - strokesGivenOnHole(homeP1Phcp, si);
-      const aNet = aGross - strokesGivenOnHole(awayP1Phcp, si);
+      const hNet = hGross - strokes(homeP1Phcp, si);
+      const aNet = aGross - strokes(awayP1Phcp, si);
       return hNet < aNet ? "home" : aNet < hNet ? "away" : "halve";
     }
 
     // Best Ball / Shamble
     const homeNets: number[] = [];
-    if (s.home_p1_gross != null) homeNets.push(s.home_p1_gross - strokesGivenOnHole(homeP1Phcp, si));
+    if (s.home_p1_gross != null) homeNets.push(s.home_p1_gross - strokes(homeP1Phcp, si));
     if (s.home_p2_gross != null && homeP2Phcp != null)
-      homeNets.push(s.home_p2_gross - strokesGivenOnHole(homeP2Phcp, si));
+      homeNets.push(s.home_p2_gross - strokes(homeP2Phcp, si));
     const awayNets: number[] = [];
-    if (s.away_p1_gross != null) awayNets.push(s.away_p1_gross - strokesGivenOnHole(awayP1Phcp, si));
+    if (s.away_p1_gross != null) awayNets.push(s.away_p1_gross - strokes(awayP1Phcp, si));
     if (s.away_p2_gross != null && awayP2Phcp != null)
-      awayNets.push(s.away_p2_gross - strokesGivenOnHole(awayP2Phcp, si));
+      awayNets.push(s.away_p2_gross - strokes(awayP2Phcp, si));
 
     if (homeNets.length === 0 || awayNets.length === 0) return null;
     const bestH = Math.min(...homeNets);
@@ -260,9 +270,6 @@ export default async function ScorecardPage({
   }
   const holesLeft = holes.length - holesPlayed;
   const matchLabel = holesPlayed === 0 ? null : matchScoreLabel(homeWon, awayWon, holesLeft);
-
-  // Dot indicator: does this player get a stroke on this hole?
-  const dot = (phcp: number, si: number) => strokesGivenOnHole(phcp, si) > 0;
 
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
 
@@ -428,7 +435,10 @@ export default async function ScorecardPage({
         </div>
 
         {/* Stroke key */}
-        <div className="px-4 py-2 text-navy/40">● = stroke given on hole</div>
+        <div className="px-4 py-2 text-navy/40 flex gap-4">
+          <span>● = full stroke</span>
+          <span className="text-amber-500">½ = half stroke</span>
+        </div>
       </div>
 
       {/* Scorecard form */}
@@ -510,10 +520,10 @@ export default async function ScorecardPage({
                 const result = computeHoleResult(s, hole);
                 const si = hole.stroke_index;
 
-                // Net score display helper
+                // Net score display helper (uses effectiveSI for 9-hole re-ranking)
                 const net = (gross: number | null | undefined, phcp: number) => {
                   if (gross == null) return null;
-                  return gross - strokesGivenOnHole(phcp, si);
+                  return gross - strokes(phcp, si);
                 };
 
                 const rowBg =
@@ -536,7 +546,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
-                              {dot(homeTeamPhcp ?? 0, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(homeTeamPhcp ?? 0, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(homeTeamPhcp ?? 0, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.home_p1_gross, homeTeamPhcp ?? 0) != null && (
                               <span className="text-xs text-navy/50">{net(s?.home_p1_gross, homeTeamPhcp ?? 0)}</span>
@@ -549,7 +560,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
-                              {dot(awayTeamPhcp ?? 0, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(awayTeamPhcp ?? 0, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(awayTeamPhcp ?? 0, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.away_p1_gross, awayTeamPhcp ?? 0) != null && (
                               <span className="text-xs text-navy/50">{net(s?.away_p1_gross, awayTeamPhcp ?? 0)}</span>
@@ -564,7 +576,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
-                              {dot(homeP1Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(homeP1Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(homeP1Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.home_p1_gross, homeP1Phcp) != null && (
                               <span className="text-xs text-navy/50">{net(s?.home_p1_gross, homeP1Phcp)}</span>
@@ -576,7 +589,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
-                              {dot(awayP1Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(awayP1Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(awayP1Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.away_p1_gross, awayP1Phcp) != null && (
                               <span className="text-xs text-navy/50">{net(s?.away_p1_gross, awayP1Phcp)}</span>
@@ -592,7 +606,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
-                              {dot(homeP1Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(homeP1Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(homeP1Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.home_p1_gross, homeP1Phcp) != null && (
                               <span className="text-xs text-navy/50">{net(s?.home_p1_gross, homeP1Phcp)}</span>
@@ -605,7 +620,8 @@ export default async function ScorecardPage({
                               <div className="flex items-center gap-0.5">
                                 <input name={`hp2_${hole.hole_number}`} type="number" min="1" max="15"
                                   defaultValue={s?.home_p2_gross ?? ""} className={inputCls} />
-                                {homeP2Phcp != null && dot(homeP2Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                                {homeP2Phcp != null && strokes(homeP2Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                                {homeP2Phcp != null && strokes(homeP2Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                               </div>
                               {homeP2Phcp != null && net(s?.home_p2_gross, homeP2Phcp) != null && (
                                 <span className="text-xs text-navy/50">{net(s?.home_p2_gross, homeP2Phcp)}</span>
@@ -618,7 +634,8 @@ export default async function ScorecardPage({
                             <div className="flex items-center gap-0.5">
                               <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15"
                                 defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
-                              {dot(awayP1Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                              {strokes(awayP1Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                              {strokes(awayP1Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                             </div>
                             {net(s?.away_p1_gross, awayP1Phcp) != null && (
                               <span className="text-xs text-navy/50">{net(s?.away_p1_gross, awayP1Phcp)}</span>
@@ -631,7 +648,8 @@ export default async function ScorecardPage({
                               <div className="flex items-center gap-0.5">
                                 <input name={`ap2_${hole.hole_number}`} type="number" min="1" max="15"
                                   defaultValue={s?.away_p2_gross ?? ""} className={inputCls} />
-                                {awayP2Phcp != null && dot(awayP2Phcp, si) && <span className="text-xs text-navy/50">●</span>}
+                                {awayP2Phcp != null && strokes(awayP2Phcp, si) === 0.5 && <span className="text-xs text-amber-500">½</span>}
+                                {awayP2Phcp != null && strokes(awayP2Phcp, si) >= 1 && <span className="text-xs text-navy/50">●</span>}
                               </div>
                               {awayP2Phcp != null && net(s?.away_p2_gross, awayP2Phcp) != null && (
                                 <span className="text-xs text-navy/50">{net(s?.away_p2_gross, awayP2Phcp)}</span>

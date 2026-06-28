@@ -15,6 +15,7 @@ import {
   shamble2v1SoloHandicap,
   shamble2v1GroupHandicaps,
   scramble2v1SoloHandicap,
+  nineHoleSIRank,
 } from "./handicap";
 
 const midPinesBlue: { rating: number; slope: number; par: number } = { rating: 72.9, slope: 138, par: 72 };
@@ -142,11 +143,59 @@ describe("strokesGivenOnHole", () => {
     }
   });
 
-  it("handles half-point handicaps (rounds down for stroke allocation)", () => {
-    // 7.5 hcp: full strokes = 0, extra = 7.5 — SI ≤ 7 gets a stroke (floor behavior)
-    // Math.floor(7.5) = 7, so holes SI 1–7 get a stroke
-    expect(strokesGivenOnHole(7.5, 7)).toBe(1);
-    expect(strokesGivenOnHole(7.5, 8)).toBe(0);
+  it("returns 0.5 for the half-stroke hole (3.5 hcp → 3 full + half on SI 4)", () => {
+    expect(strokesGivenOnHole(3.5, 1)).toBe(1);
+    expect(strokesGivenOnHole(3.5, 2)).toBe(1);
+    expect(strokesGivenOnHole(3.5, 3)).toBe(1);
+    expect(strokesGivenOnHole(3.5, 4)).toBe(0.5); // half stroke
+    expect(strokesGivenOnHole(3.5, 5)).toBe(0);
+  });
+
+  it("total strokes across 18 holes equals playingHcp for whole numbers", () => {
+    const hcp = 7;
+    const total = Array.from({ length: 18 }, (_, i) => strokesGivenOnHole(hcp, i + 1))
+      .reduce((a, b) => a + b, 0);
+    expect(total).toBe(hcp);
+  });
+
+  it("total strokes across 18 holes equals playingHcp for half numbers", () => {
+    const hcp = 7.5;
+    const total = Array.from({ length: 18 }, (_, i) => strokesGivenOnHole(hcp, i + 1))
+      .reduce((a, b) => a + b, 0);
+    expect(total).toBe(hcp);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nineHoleSIRank
+// ---------------------------------------------------------------------------
+describe("nineHoleSIRank", () => {
+  // Pine Wild front 9 SIs (holes 1-9): 5,13,17,1,9,3,15,11,7
+  const frontSIs = [5, 13, 17, 1, 9, 3, 15, 11, 7];
+
+  it("ranks SI 1 as 1 (hardest)", () => {
+    expect(nineHoleSIRank(1, frontSIs)).toBe(1);
+  });
+
+  it("ranks SI 3 as 2", () => {
+    expect(nineHoleSIRank(3, frontSIs)).toBe(2);
+  });
+
+  it("ranks SI 5 as 3", () => {
+    expect(nineHoleSIRank(5, frontSIs)).toBe(3);
+  });
+
+  it("ranks SI 7 as 4", () => {
+    expect(nineHoleSIRank(7, frontSIs)).toBe(4);
+  });
+
+  it("so a 3.5-hcp player gets strokes on ranks 1-3 and half on rank 4", () => {
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(1,  frontSIs))).toBe(1);   // hole 4
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(3,  frontSIs))).toBe(1);   // hole 6
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(5,  frontSIs))).toBe(1);   // hole 1
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(7,  frontSIs))).toBe(0.5); // hole 9 — half!
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(9,  frontSIs))).toBe(0);
+    expect(strokesGivenOnHole(3.5, nineHoleSIRank(11, frontSIs))).toBe(0);
   });
 });
 
