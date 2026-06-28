@@ -36,7 +36,7 @@ export default async function MatchupsPage({
     .from("teams")
     .select("id, name, color")
     .eq("event_id", params.id)
-    .order("created_at");
+    .order("name");
 
   const homeTeam = teams?.[0] ?? null;
   const awayTeam = teams?.[1] ?? null;
