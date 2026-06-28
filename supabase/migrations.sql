@@ -115,7 +115,7 @@ create table if not exists event_participants (
   id            uuid primary key default gen_random_uuid(),
   event_id      uuid not null references events(id) on delete cascade,
   player_id     uuid references players(id) on delete set null,
-  team_id       uuid references teams(id) on delete set null,
+  team_id       uuid references teams(id) on delete cascade,
   display_name  text not null,
   is_captain    boolean not null default false,
   deposit_paid  boolean not null default false,
@@ -506,3 +506,28 @@ create policy "authenticated users can read hole_scores" on hole_scores for sele
 create policy "admins can manage hole_scores" on hole_scores for all to authenticated
   using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
+-- Fix: event_participants.team_id should cascade (not set null)
+-- Also purge duplicate participants caused by prior seed runs
+-- ============================================================
+
+-- 1. Re-create the FK with CASCADE
+do $$ begin
+  alter table event_participants drop constraint if exists event_participants_team_id_fkey;
+  alter table event_participants
+    add constraint event_participants_team_id_fkey
+    foreign key (team_id) references teams(id) on delete cascade;
+exception when others then null;
+end $$;
+
+-- 2. Delete all participants for seeded 2025 event so seed re-runs clean
+do $$
+declare v_event_id uuid;
+begin
+  select id into v_event_id from events where year = 2025;
+  if v_event_id is not null then
+    delete from event_participants where event_id = v_event_id;
+    delete from teams where event_id = v_event_id;
+  end if;
+end $$;
