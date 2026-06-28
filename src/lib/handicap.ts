@@ -156,7 +156,7 @@ export function singlesHandicaps(
 }
 
 /**
- * Pinehurst / Scramble (1 ball holed):
+ * Pinehurst / Scramble (1 ball per team, 2 balls total):
  * Each team's handicap = sum of both players' playing handicaps (rounded to 0.5).
  * The two team totals are then normalized so the lower team gets 0 net strokes.
  *
