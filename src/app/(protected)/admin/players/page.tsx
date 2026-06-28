@@ -33,7 +33,6 @@ export default async function AdminPlayersPage() {
       name:          formData.get("name") as string,
       email:         formData.get("email") as string,
       current_index: formData.get("index") ? parseFloat(formData.get("index") as string) : null,
-      hcp_allowance: formData.get("hcp_allowance") ? parseInt(formData.get("hcp_allowance") as string) : 100,
       role:          formData.get("role") as string,
     }).eq("id", formData.get("id") as string);
     revalidatePath("/admin/players");
