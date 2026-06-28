@@ -476,3 +476,6 @@ create policy "authenticated users can read matchups" on matchups for select to 
 create policy "admins can manage matchups" on matchups for all to authenticated
   using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- Milestone 8b: tee_time on matchups
+alter table matchups add column if not exists tee_time time;
