@@ -331,26 +331,104 @@ export default async function ScorecardPage({
       {/* Handicap warning */}
       {missingHcps && (
         <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-          Some players have no handicap calculated for this tee set — defaulting to 0. Run Calculate Handicaps on the roster page first.
+          ⚠ Some players have no handicap for this tee set — showing 0. Go to the team roster and hit &ldquo;Calculate Handicaps&rdquo; first.
         </p>
       )}
 
-      {/* Handicap legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/50">
-        {isOneScore ? (
-          <>
-            <span><span className="font-semibold text-navy">{homeLabel}</span> team hcp: {homeTeamPhcp ?? 0}</span>
-            <span><span className="font-semibold text-navy">{awayLabel}</span> team hcp: {awayTeamPhcp ?? 0}</span>
-          </>
-        ) : (
-          <>
-            {matchup.home_p1 && <span>{matchup.home_p1.display_name}: {homeP1Phcp}</span>}
-            {matchup.home_p2 && homeP2Phcp != null && <span>{matchup.home_p2.display_name}: {homeP2Phcp}</span>}
-            {matchup.away_p1 && <span>{matchup.away_p1.display_name}: {awayP1Phcp}</span>}
-            {matchup.away_p2 && awayP2Phcp != null && <span>{matchup.away_p2.display_name}: {awayP2Phcp}</span>}
-          </>
-        )}
-        <span className="text-navy/30">· ● = stroke given</span>
+      {/* Handicap breakdown */}
+      <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline text-xs">
+        {/* Home team */}
+        <div className="px-4 py-3 space-y-1">
+          <p className="font-semibold text-navy flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: homeTeam?.color ?? "#ccc" }} />
+            {homeLabel}
+            {isOneScore
+              ? ` — ${[matchup.home_p1?.display_name, matchup.home_p2?.display_name].filter(Boolean).join(" / ")}`
+              : fmt.name === "Singles"
+              ? ` — ${matchup.home_p1?.display_name}`
+              : ` — ${[matchup.home_p1?.display_name, matchup.home_p2?.display_name].filter(Boolean).join(" / ")}`}
+          </p>
+          {isOneScore ? (
+            <div className="text-navy/60 space-y-0.5">
+              {matchup.home_p1 && (
+                <p>
+                  {matchup.home_p1.display_name}: course hcp {hp1CH}
+                  {fmt.name === "Scramble"
+                    ? ` × ${hp1CH <= (hp2CH ?? 999) ? pct : pct2}% (${hp1CH <= (hp2CH ?? 999) ? "low" : "high"}) = ${playingHandicap(hp1CH, hp1CH <= (hp2CH ?? 999) ? pct : pct2, nineHole)}`
+                    : ` × ${pct}% = ${playingHandicap(hp1CH, pct, nineHole)}`}
+                </p>
+              )}
+              {matchup.home_p2 && hp2CH !== null && (
+                <p>
+                  {matchup.home_p2.display_name}: course hcp {hp2CH}
+                  {fmt.name === "Scramble"
+                    ? ` × ${hp2CH < hp1CH ? pct : pct2}% (${hp2CH < hp1CH ? "low" : "high"}) = ${playingHandicap(hp2CH, hp2CH < hp1CH ? pct : pct2, nineHole)}`
+                    : ` × ${pct}% = ${playingHandicap(hp2CH, pct, nineHole)}`}
+                </p>
+              )}
+              <p className="font-semibold text-navy pt-0.5">
+                Team playing hcp (normalized): {homeTeamPhcp ?? 0}
+              </p>
+            </div>
+          ) : fmt.name === "Singles" ? (
+            <p className="text-navy/60">
+              {matchup.home_p1?.display_name}: course hcp {hp1CH} × {pct}% = playing hcp {homeP1Phcp}
+            </p>
+          ) : (
+            <div className="text-navy/60 space-y-0.5">
+              {matchup.home_p1 && <p>{matchup.home_p1.display_name}: course hcp {hp1CH} × {pct}% → playing hcp {homeP1Phcp}</p>}
+              {matchup.home_p2 && homeP2Phcp != null && <p>{matchup.home_p2.display_name}: course hcp {hp2CH ?? 0} × {pct}% → playing hcp {homeP2Phcp}</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Away team */}
+        <div className="px-4 py-3 space-y-1">
+          <p className="font-semibold text-navy flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: awayTeam?.color ?? "#ccc" }} />
+            {awayLabel}
+            {isOneScore
+              ? ` — ${[matchup.away_p1?.display_name, matchup.away_p2?.display_name].filter(Boolean).join(" / ")}`
+              : fmt.name === "Singles"
+              ? ` — ${matchup.away_p1?.display_name}`
+              : ` — ${[matchup.away_p1?.display_name, matchup.away_p2?.display_name].filter(Boolean).join(" / ")}`}
+          </p>
+          {isOneScore ? (
+            <div className="text-navy/60 space-y-0.5">
+              {matchup.away_p1 && (
+                <p>
+                  {matchup.away_p1.display_name}: course hcp {ap1CH}
+                  {fmt.name === "Scramble"
+                    ? ` × ${ap1CH <= (ap2CH ?? 999) ? pct : pct2}% (${ap1CH <= (ap2CH ?? 999) ? "low" : "high"}) = ${playingHandicap(ap1CH, ap1CH <= (ap2CH ?? 999) ? pct : pct2, nineHole)}`
+                    : ` × ${pct}% = ${playingHandicap(ap1CH, pct, nineHole)}`}
+                </p>
+              )}
+              {matchup.away_p2 && ap2CH !== null && (
+                <p>
+                  {matchup.away_p2.display_name}: course hcp {ap2CH}
+                  {fmt.name === "Scramble"
+                    ? ` × ${ap2CH < ap1CH ? pct : pct2}% (${ap2CH < ap1CH ? "low" : "high"}) = ${playingHandicap(ap2CH, ap2CH < ap1CH ? pct : pct2, nineHole)}`
+                    : ` × ${pct}% = ${playingHandicap(ap2CH, pct, nineHole)}`}
+                </p>
+              )}
+              <p className="font-semibold text-navy pt-0.5">
+                Team playing hcp (normalized): {awayTeamPhcp ?? 0}
+              </p>
+            </div>
+          ) : fmt.name === "Singles" ? (
+            <p className="text-navy/60">
+              {matchup.away_p1?.display_name}: course hcp {ap1CH} × {pct}% = playing hcp {awayP1Phcp}
+            </p>
+          ) : (
+            <div className="text-navy/60 space-y-0.5">
+              {matchup.away_p1 && <p>{matchup.away_p1.display_name}: course hcp {ap1CH} × {pct}% → playing hcp {awayP1Phcp}</p>}
+              {matchup.away_p2 && awayP2Phcp != null && <p>{matchup.away_p2.display_name}: course hcp {ap2CH ?? 0} × {pct}% → playing hcp {awayP2Phcp}</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Stroke key */}
+        <div className="px-4 py-2 text-navy/40">● = stroke given on hole</div>
       </div>
 
       {/* Scorecard form */}
@@ -367,46 +445,58 @@ export default async function ScorecardPage({
 
                 {isOneScore ? (
                   <>
-                    <th className="text-center px-2 py-2 text-xs font-semibold w-20"
+                    <th className="text-center px-2 py-2 text-xs font-semibold w-24"
                       style={{ color: homeTeam?.color ?? "#0C2D55" }}>
-                      {homeLabel}
+                      <div>{homeLabel}</div>
+                      <div className="font-normal text-navy/50">
+                        {[matchup.home_p1?.display_name, matchup.home_p2?.display_name].filter(Boolean).join(" / ")}
+                      </div>
                     </th>
-                    <th className="text-center px-2 py-2 text-xs font-semibold w-20"
+                    <th className="text-center px-2 py-2 text-xs font-semibold w-24"
                       style={{ color: awayTeam?.color ?? "#0C2D55" }}>
-                      {awayLabel}
+                      <div>{awayLabel}</div>
+                      <div className="font-normal text-navy/50">
+                        {[matchup.away_p1?.display_name, matchup.away_p2?.display_name].filter(Boolean).join(" / ")}
+                      </div>
                     </th>
                   </>
                 ) : fmt.name === "Singles" ? (
                   <>
                     <th className="text-center px-2 py-2 text-xs font-semibold w-24"
                       style={{ color: homeTeam?.color ?? "#0C2D55" }}>
-                      {matchup.home_p1?.display_name}
+                      <div>{homeLabel}</div>
+                      <div className="font-normal text-navy/50">{matchup.home_p1?.display_name}</div>
                     </th>
                     <th className="text-center px-2 py-2 text-xs font-semibold w-24"
                       style={{ color: awayTeam?.color ?? "#0C2D55" }}>
-                      {matchup.away_p1?.display_name}
+                      <div>{awayLabel}</div>
+                      <div className="font-normal text-navy/50">{matchup.away_p1?.display_name}</div>
                     </th>
                   </>
                 ) : (
                   <>
                     <th className="text-center px-1 py-2 text-xs font-semibold w-20"
                       style={{ color: homeTeam?.color ?? "#0C2D55" }}>
-                      {matchup.home_p1?.display_name}
+                      <div>{matchup.home_p1?.display_name}</div>
+                      <div className="font-normal opacity-60">{homeLabel} · {homeP1Phcp} hcp</div>
                     </th>
                     {matchup.home_p2 && (
                       <th className="text-center px-1 py-2 text-xs font-semibold w-20"
                         style={{ color: homeTeam?.color ?? "#0C2D55" }}>
-                        {matchup.home_p2.display_name}
+                        <div>{matchup.home_p2.display_name}</div>
+                        <div className="font-normal opacity-60">{homeLabel} · {homeP2Phcp ?? 0} hcp</div>
                       </th>
                     )}
                     <th className="text-center px-1 py-2 text-xs font-semibold w-20"
                       style={{ color: awayTeam?.color ?? "#0C2D55" }}>
-                      {matchup.away_p1?.display_name}
+                      <div>{matchup.away_p1?.display_name}</div>
+                      <div className="font-normal opacity-60">{awayLabel} · {awayP1Phcp} hcp</div>
                     </th>
                     {matchup.away_p2 && (
                       <th className="text-center px-1 py-2 text-xs font-semibold w-20"
                         style={{ color: awayTeam?.color ?? "#0C2D55" }}>
-                        {matchup.away_p2.display_name}
+                        <div>{matchup.away_p2.display_name}</div>
+                        <div className="font-normal opacity-60">{awayLabel} · {awayP2Phcp ?? 0} hcp</div>
                       </th>
                     )}
                   </>
