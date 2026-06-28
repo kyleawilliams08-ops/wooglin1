@@ -199,6 +199,10 @@ export default async function MatchupsPage({
                   }`}>
                     {m.status}
                   </span>
+                  <Link href={`/admin/events/${params.id}/rounds/${params.roundId}/matchups/${m.id}`}
+                    className="text-sm text-navy/60 hover:text-navy">
+                    Edit ›
+                  </Link>
                   <DeleteButton
                     action={deleteMatchup}
                     fields={{ matchup_id: m.id }}
