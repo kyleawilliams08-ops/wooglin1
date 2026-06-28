@@ -174,7 +174,6 @@ create trigger on_auth_user_updated
 insert into players (name, nickname, email, current_index, role) values
   ('Kyle Williams',      'Kyle',    'kyle@fairwayfinancialpartners.com', 8.0,  'admin'),
   ('Ryan Hendrickson',   'Ryan',    'ryan@wooglin.local',                12.4, 'captain'),
-  ('Alex Moore',         'Alex',    'alex@wooglin.local',                13.2, 'player'),
   ('Joe Guenther',       'JoeG',    'joeg@wooglin.local',                16.1, 'player'),
   ('Joey Merritt',       'Joey',    'joey@wooglin.local',                12.0, 'player'),
   ('Lars',               'Lars',    'lars@wooglin.local',                null, 'player'),
@@ -223,7 +222,7 @@ begin
   insert into event_participants (event_id, player_id, team_id, display_name, is_captain)
   select v_event_id, p.id, v_usa_id, p.nickname, (p.nickname = 'Ryan')
   from players p where p.email in (
-    'ryan@wooglin.local','alex@wooglin.local','joeg@wooglin.local',
+    'ryan@wooglin.local','joeg@wooglin.local',
     'joey@wooglin.local','lars@wooglin.local','ross@wooglin.local',
     'allred@wooglin.local','stribos@wooglin.local'
   );
@@ -308,6 +307,32 @@ create policy "authenticated users can read event_courses" on event_courses for 
 create policy "admins can manage event_courses" on event_courses for all to authenticated
   using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
+-- Milestone 5: formats
+-- ============================================================
+create table if not exists formats (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null unique,
+  description text,
+  team_size   integer,  -- null = singles
+  sort_order  integer not null default 0
+);
+
+alter table formats enable row level security;
+drop policy if exists "authenticated users can read formats" on formats;
+create policy "authenticated users can read formats" on formats for select to authenticated using (true);
+
+insert into formats (name, description, team_size, sort_order) values
+  ('Best Ball',  'Each player plays their own ball; best score on the hole counts for the team.',  2, 1),
+  ('Shamble',    'Team drives from the best tee shot, then each player plays their own ball in.',  2, 2),
+  ('Pinehurst',  'Partners alternate shots after driving; one ball per team.',                     2, 3),
+  ('Scramble',   'All players hit from the best shot each time.',                                  2, 4),
+  ('Singles',    'One-on-one match play.',                                                         1, 5)
+on conflict (name) do update set
+  description = excluded.description,
+  team_size   = excluded.team_size,
+  sort_order  = excluded.sort_order;
 
 -- ============================================================
 -- SEED: 3 courses (idempotent)
