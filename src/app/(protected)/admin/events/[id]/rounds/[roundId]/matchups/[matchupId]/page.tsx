@@ -30,7 +30,7 @@ export default async function EditMatchupPage({
   const { data: matchupRaw } = await supabase
     .from("matchups")
     .select(`
-      id, match_number, status, result, tee_time,
+      id, match_number, status, result, tee_time, match_score,
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name),
@@ -39,7 +39,8 @@ export default async function EditMatchupPage({
     .eq("id", params.matchupId)
     .single();
   const matchup = matchupRaw as unknown as {
-    id: string; match_number: number; status: string; result: string | null; tee_time: string | null;
+    id: string; match_number: number; status: string; result: string | null;
+    tee_time: string | null; match_score: string | null;
     home_p1: { id: string; display_name: string } | null;
     home_p2: { id: string; display_name: string } | null;
     away_p1: { id: string; display_name: string } | null;
@@ -89,13 +90,14 @@ export default async function EditMatchupPage({
     const supabase = createClient();
     const teeTime = formData.get("tee_time") as string;
     await supabase.from("matchups").update({
-      home_p1_id: formData.get("home_p1") as string || null,
-      home_p2_id: isSingles ? null : (formData.get("home_p2") as string || null),
-      away_p1_id: formData.get("away_p1") as string || null,
-      away_p2_id: isSingles ? null : (formData.get("away_p2") as string || null),
-      tee_time:   teeTime || null,
-      status:     formData.get("status") as string,
-      result:     formData.get("result") as string || null,
+      home_p1_id:  formData.get("home_p1") as string || null,
+      home_p2_id:  isSingles ? null : (formData.get("home_p2") as string || null),
+      away_p1_id:  formData.get("away_p1") as string || null,
+      away_p2_id:  isSingles ? null : (formData.get("away_p2") as string || null),
+      tee_time:    teeTime || null,
+      status:      formData.get("status") as string,
+      result:      formData.get("result") as string || null,
+      match_score: formData.get("match_score") as string || null,
     }).eq("id", params.matchupId);
     revalidatePath(matchupsPath);
     redirect(matchupsPath);
@@ -199,6 +201,18 @@ export default async function EditMatchupPage({
               <option value="halve">Halved</option>
             </select>
           </div>
+        </div>
+
+        {/* Match score */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-navy">Match score</label>
+          <input
+            name="match_score"
+            type="text"
+            defaultValue={matchup.match_score ?? ""}
+            placeholder="e.g. 4&3, 2&1, 1 up, All Square"
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy"
+          />
         </div>
 
         <button type="submit"

@@ -479,3 +479,6 @@ create policy "admins can manage matchups" on matchups for all to authenticated
 
 -- Milestone 8b: tee_time on matchups
 alter table matchups add column if not exists tee_time time;
+
+-- Milestone 8c: match_score on matchups
+alter table matchups add column if not exists match_score text;

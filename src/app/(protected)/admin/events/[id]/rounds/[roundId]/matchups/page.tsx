@@ -52,7 +52,7 @@ export default async function MatchupsPage({
   const { data: matchupsRaw } = await supabase
     .from("matchups")
     .select(`
-      id, match_number, status, result, tee_time,
+      id, match_number, status, result, tee_time, match_score,
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name),
@@ -62,7 +62,8 @@ export default async function MatchupsPage({
     .order("tee_time", { ascending: true, nullsFirst: false })
     .order("match_number");
   const matchups = (matchupsRaw ?? []) as unknown as {
-    id: string; match_number: number; status: string; result: string | null; tee_time: string | null;
+    id: string; match_number: number; status: string; result: string | null;
+    tee_time: string | null; match_score: string | null;
     home_p1: { id: string; display_name: string } | null;
     home_p2: { id: string; display_name: string } | null;
     away_p1: { id: string; display_name: string } | null;
@@ -121,11 +122,20 @@ export default async function MatchupsPage({
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
-  const resultLabel: Record<string, string> = {
-    home:  homeTeam?.name ?? "Home",
-    away:  awayTeam?.name ?? "Away",
-    halve: "Halved",
-  };
+  function resultDisplay(result: string | null, matchScore: string | null) {
+    if (!result) return null;
+    const homeName = homeTeam?.name ?? "Home";
+    const awayName = awayTeam?.name ?? "Away";
+    const label =
+      result === "home"  ? `${homeName} wins` :
+      result === "away"  ? `${awayName} wins` :
+      "Halved";
+    const points =
+      result === "home"  ? `${homeName} 1 – 0 ${awayName}` :
+      result === "away"  ? `${homeName} 0 – 1 ${awayName}` :
+      `${homeName} ½ – ½ ${awayName}`;
+    return { label, points, score: matchScore };
+  }
 
   function fmt12(t: string | null) {
     if (!t) return null;
@@ -187,9 +197,16 @@ export default async function MatchupsPage({
                     <span className="text-navy/30">vs</span>
                     <span className="font-semibold text-navy">{awayPairing}</span>
                   </div>
-                  {m.result && (
-                    <p className="text-xs text-navy/50 mt-0.5">Result: {resultLabel[m.result] ?? m.result}</p>
-                  )}
+                  {(() => {
+                    const r = resultDisplay(m.result, m.match_score);
+                    if (!r) return null;
+                    return (
+                      <div className="mt-1 space-y-0.5">
+                        <p className="text-xs font-semibold text-navy/70">{r.label}{r.score ? ` · ${r.score}` : ""}</p>
+                        <p className="text-xs text-navy/40">{r.points}</p>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
