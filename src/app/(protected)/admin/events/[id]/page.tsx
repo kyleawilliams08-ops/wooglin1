@@ -209,7 +209,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
             </div>
           );
         })}
-        {availableCourses.length > 0 && (
+        {availableCourses.length > 0 ? (
           <form action={addEventCourse} className="flex gap-2">
             <select name="course_id" required
               className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
@@ -222,6 +222,8 @@ export default async function EventDetailPage({ params }: { params: { id: string
               Add
             </button>
           </form>
+        ) : (
+          <p className="text-sm text-navy/40">All courses in the library are linked to this event.</p>
         )}
       </div>
 
@@ -242,13 +244,19 @@ export default async function EventDetailPage({ params }: { params: { id: string
                 {r.played_at ? ` · ${r.played_at}` : ""}
               </p>
             </div>
-            <DeleteButton
-              action={deleteRound}
-              fields={{ round_id: r.id }}
-              confirm={`Delete Round ${r.round_number}?`}
-              label="Delete"
-              className="text-xs text-usa-red hover:underline"
-            />
+            <div className="flex items-center gap-3">
+              <Link href={`/admin/events/${params.id}/rounds/${r.id}`}
+                className="text-sm text-navy/60 hover:text-navy">
+                Edit ›
+              </Link>
+              <DeleteButton
+                action={deleteRound}
+                fields={{ round_id: r.id }}
+                confirm={`Delete Round ${r.round_number}?`}
+                label="Delete"
+                className="text-xs text-usa-red hover:underline"
+              />
+            </div>
           </div>
         ))}
 
