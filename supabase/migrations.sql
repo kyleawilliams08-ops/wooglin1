@@ -244,10 +244,11 @@ $$;
 
 create table if not exists courses (
   id         uuid primary key default gen_random_uuid(),
-  name       text not null,
+  name       text not null unique,
   location   text,
   created_at timestamptz not null default now()
 );
+alter table courses add constraint if not exists courses_name_unique unique (name);
 
 alter table courses enable row level security;
 drop policy if exists "authenticated users can read courses" on courses;
@@ -372,7 +373,7 @@ declare
   v_mp_blue   uuid; v_pw_blue   uuid; v_tr_disc  uuid;
 begin
   -- Mid Pines
-  insert into courses (name, location) values ('Mid Pines Inn & Golf Club', 'Southern Pines, NC') on conflict do nothing;
+  insert into courses (name, location) values ('Mid Pines Inn & Golf Club', 'Southern Pines, NC') on conflict (name) do nothing;
   select id into v_mid_pines from courses where name = 'Mid Pines Inn & Golf Club';
   delete from course_tees where course_id = v_mid_pines and tee_name = 'Blue';
   insert into course_tees (course_id, tee_name, rating, slope, par) values (v_mid_pines, 'Blue', 72.9, 138, 72) returning id into v_mp_blue;
@@ -385,7 +386,7 @@ begin
     (v_mp_blue, 16, 3, 14),(v_mp_blue, 17, 5,  6),(v_mp_blue, 18, 4, 12);
 
   -- Pine Wild - Magnolia
-  insert into courses (name, location) values ('Pine Wild Golf Club - Magnolia', 'Pinehurst, NC') on conflict do nothing;
+  insert into courses (name, location) values ('Pine Wild Golf Club - Magnolia', 'Pinehurst, NC') on conflict (name) do nothing;
   select id into v_pine_wild from courses where name = 'Pine Wild Golf Club - Magnolia';
   delete from course_tees where course_id = v_pine_wild and tee_name = 'Blue';
   insert into course_tees (course_id, tee_name, rating, slope, par) values (v_pine_wild, 'Blue', 73.8, 134, 72) returning id into v_pw_blue;
@@ -398,7 +399,7 @@ begin
     (v_pw_blue, 16, 3, 10),(v_pw_blue, 17, 5,  8),(v_pw_blue, 18, 4, 12);
 
   -- Tobacco Road
-  insert into courses (name, location) values ('Tobacco Road Golf Club', 'Sanford, NC') on conflict do nothing;
+  insert into courses (name, location) values ('Tobacco Road Golf Club', 'Sanford, NC') on conflict (name) do nothing;
   select id into v_tobacco from courses where name = 'Tobacco Road Golf Club';
   delete from course_tees where course_id = v_tobacco and tee_name = 'Disc';
   insert into course_tees (course_id, tee_name, rating, slope, par) values (v_tobacco, 'Disc', 70.3, 135, 71) returning id into v_tr_disc;
