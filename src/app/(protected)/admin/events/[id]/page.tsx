@@ -72,6 +72,40 @@ export default async function EventDetailPage({ params }: { params: { id: string
     teams: { name: string; color: string } | null;
   }[];
 
+  // Scoreboard: matchup results for all rounds in this event
+  const roundIds = rounds.map((r) => r.id);
+  const { data: matchupResults } = roundIds.length > 0
+    ? await supabase
+        .from("matchups")
+        .select("round_id, result")
+        .in("round_id", roundIds)
+        .not("result", "is", null)
+    : { data: [] };
+
+  // Aggregate points per team per round
+  // home = teams[0] (alphabetically), away = teams[1]
+  const sortedTeams = [...(teams ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const homeTeam = sortedTeams[0];
+  const awayTeam = sortedTeams[1];
+
+  // pts[teamId][roundId] = points
+  const pts: Record<string, Record<string, number>> = {};
+  if (homeTeam) pts[homeTeam.id] = {};
+  if (awayTeam) pts[awayTeam.id] = {};
+
+  for (const m of matchupResults ?? []) {
+    if (!m.result || !m.round_id) continue;
+    if (homeTeam) pts[homeTeam.id][m.round_id] = (pts[homeTeam.id][m.round_id] ?? 0) + (m.result === "home" ? 1 : m.result === "halve" ? 0.5 : 0);
+    if (awayTeam) pts[awayTeam.id][m.round_id] = (pts[awayTeam.id][m.round_id] ?? 0) + (m.result === "away" ? 1 : m.result === "halve" ? 0.5 : 0);
+  }
+
+  function fmtPts(n: number | undefined) {
+    if (n === undefined) return "—";
+    if (n === 0.5) return "½";
+    if (n % 1 === 0.5) return `${Math.floor(n)}½`;
+    return String(n);
+  }
+
   const countByTeam = participants.reduce<Record<string, number>>((acc, ep) => {
     if (ep.team_id) acc[ep.team_id] = (acc[ep.team_id] ?? 0) + 1;
     return acc;
@@ -190,6 +224,52 @@ export default async function EventDetailPage({ params }: { params: { id: string
           Save Changes
         </button>
       </form>
+
+      {/* Scoreboard */}
+      {rounds.length > 0 && homeTeam && awayTeam && (
+        <div className="space-y-2">
+          <p className="font-semibold text-navy">Scoreboard</p>
+          <div className="overflow-x-auto rounded-xl border border-hairline">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-hairline">
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-navy/50 uppercase tracking-wide w-24">Team</th>
+                  {rounds.map((r) => (
+                    <th key={r.id} className="text-center px-3 py-2 text-xs font-semibold text-navy/50 uppercase tracking-wide min-w-[3rem]">
+                      R{r.round_number}
+                    </th>
+                  ))}
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-navy/50 uppercase tracking-wide min-w-[3.5rem]">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[homeTeam, awayTeam].map((team) => {
+                  const roundPts = pts[team.id] ?? {};
+                  const total = Object.values(roundPts).reduce((s, v) => s + v, 0);
+                  return (
+                    <tr key={team.id} className="border-b border-hairline last:border-0">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: team.color }} />
+                          <span className="font-bold text-navy">{team.name}</span>
+                        </div>
+                      </td>
+                      {rounds.map((r) => (
+                        <td key={r.id} className="text-center px-3 py-3 font-semibold text-navy">
+                          {fmtPts(roundPts[r.id])}
+                        </td>
+                      ))}
+                      <td className="text-center px-3 py-3 font-bold text-navy text-base">
+                        {fmtPts(total || undefined)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Courses */}
       <div className="space-y-3">
