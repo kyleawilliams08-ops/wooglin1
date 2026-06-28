@@ -61,12 +61,18 @@ export default async function EventDetailPage({ params }: { params: { id: string
     formats: { name: string } | null;
   }[];
 
-  const { data: participantCounts } = await supabase
+  const { data: participantsRaw } = await supabase
     .from("event_participants")
-    .select("team_id")
-    .eq("event_id", params.id);
+    .select("id, display_name, is_captain, team_id, players(id, name, current_index), teams(name, color)")
+    .eq("event_id", params.id)
+    .order("display_name");
+  const participants = (participantsRaw ?? []) as unknown as {
+    id: string; display_name: string; is_captain: boolean; team_id: string | null;
+    players: { id: string; name: string; current_index: number | null } | null;
+    teams: { name: string; color: string } | null;
+  }[];
 
-  const countByTeam = (participantCounts ?? []).reduce<Record<string, number>>((acc, ep) => {
+  const countByTeam = participants.reduce<Record<string, number>>((acc, ep) => {
     if (ep.team_id) acc[ep.team_id] = (acc[ep.team_id] ?? 0) + 1;
     return acc;
   }, {});
@@ -343,6 +349,34 @@ export default async function EventDetailPage({ params }: { params: { id: string
             Add Team
           </button>
         </form>
+      </div>
+
+      {/* Participants */}
+      <div className="space-y-3">
+        <p className="font-semibold text-navy">Participants · {participants.length}</p>
+        {participants.length === 0 && (
+          <p className="text-sm text-navy/40">No participants yet. Add players via team rosters above.</p>
+        )}
+        <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline">
+          {participants.map((ep) => (
+            <div key={ep.id} className="flex items-center justify-between px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                {ep.teams && (
+                  <span
+                    className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: ep.teams.color }}
+                  />
+                )}
+                <span className="text-sm font-medium text-navy">{ep.display_name}</span>
+                {ep.is_captain && <span className="text-xs text-navy/40">C</span>}
+              </div>
+              <div className="flex items-center gap-3 text-xs text-navy/40">
+                {ep.teams && <span>{ep.teams.name}</span>}
+                <span>idx {ep.players?.current_index ?? "—"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Delete event */}

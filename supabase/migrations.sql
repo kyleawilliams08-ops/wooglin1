@@ -186,7 +186,8 @@ insert into players (name, nickname, email, current_index, role) values
   ('Jared Shoops',       'Shoops',  'shoops@wooglin.local',              10.1, 'player'),
   ('Michael Boynton',    'Boynton', 'boynton@wooglin.local',             13.1, 'player'),
   ('Sam Taylor',         'SammyT',  'sammyt@wooglin.local',              14.7, 'player'),
-  ('Zach Williams',      'Zach',    'zach@wooglin.local',                null, 'player')
+  ('Zach Williams',      'Zach',    'zach@wooglin.local',                null, 'player'),
+  ('Alex Moore',         'Moore',   'moore@wooglin.local',               null, 'player')
 on conflict (email) do update set
   name          = excluded.name,
   nickname      = excluded.nickname,
