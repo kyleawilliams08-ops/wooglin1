@@ -182,3 +182,54 @@ export function twoTeamHandicaps(
   const [teamA, teamB] = normalizeToLowest([teamAHcp, teamBHcp]);
   return { teamA, teamB };
 }
+
+// ---------------------------------------------------------------------------
+// 2v1 helpers — one side has a solo player
+// ---------------------------------------------------------------------------
+
+/**
+ * Shamble 2v1 — solo player hits 2 drives and picks the best, then plays
+ * their own ball. Gets 50% allowance (reduced from the standard 70%).
+ *
+ * To build the full 3-ball group, normalize the solo hcp alongside the two
+ * partners' standard 70% playing hcps via normalizeToLowest.
+ */
+export function shamble2v1SoloHandicap(
+  index: number,
+  tee: Tee,
+  nineHole = false,
+): number {
+  return playingHandicap(courseHandicap(index, tee), 50, nineHole);
+}
+
+/**
+ * Shamble 2v1 — returns normalized playing handicaps for all 3 balls:
+ * [soloNet, partnerANet, partnerBNet]. Partners use standard 70% Shamble.
+ */
+export function shamble2v1GroupHandicaps(
+  soloIndex: number,
+  partnerAIndex: number,
+  partnerBIndex: number,
+  tee: Tee,
+  nineHole = false,
+): [number, number, number] {
+  const soloHcp = shamble2v1SoloHandicap(soloIndex, tee, nineHole);
+  const pAHcp   = playingHandicap(courseHandicap(partnerAIndex, tee), 70, nineHole);
+  const pBHcp   = playingHandicap(courseHandicap(partnerBIndex, tee), 70, nineHole);
+  const [solo, pA, pB] = normalizeToLowest([soloHcp, pAHcp, pBHcp]);
+  return [solo, pA, pB];
+}
+
+/**
+ * Scramble 2v1 — solo player hits for both positions.
+ * Treated as the low player only (35% allowance); no second player to
+ * contribute the 15%. Their team handicap is just this single value.
+ * Pass to teamHandicap/twoTeamHandicaps as normal.
+ */
+export function scramble2v1SoloHandicap(
+  index: number,
+  tee: Tee,
+  nineHole = false,
+): number {
+  return playingHandicap(courseHandicap(index, tee), 35, nineHole);
+}

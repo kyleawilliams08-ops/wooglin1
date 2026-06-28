@@ -12,6 +12,9 @@ import {
   scrambleHandicaps,
   partnerHandicaps,
   singlesHandicaps,
+  shamble2v1SoloHandicap,
+  shamble2v1GroupHandicaps,
+  scramble2v1SoloHandicap,
 } from "./handicap";
 
 const midPinesBlue: { rating: number; slope: number; par: number } = { rating: 72.9, slope: 138, par: 72 };
@@ -294,6 +297,62 @@ describe("singlesHandicaps", () => {
     const r = singlesHandicaps(8.0, 14.7, midPinesBlue, singles, true);
     expect(r.hcpA).toBe(0);
     expect(r.hcpB).toBe(4.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2v1 formats
+// ---------------------------------------------------------------------------
+
+describe("shamble2v1SoloHandicap", () => {
+  it("uses 50% allowance instead of standard 70%", () => {
+    // 8.0 → courseHcp 11 → 11 × 50% = 5.5
+    expect(shamble2v1SoloHandicap(8.0, midPinesBlue)).toBe(5.5);
+  });
+
+  it("is lower than the standard 70% Shamble allowance", () => {
+    const solo = shamble2v1SoloHandicap(8.0, midPinesBlue);
+    const standard = playingHandicap(courseHandicap(8.0, midPinesBlue), 70);
+    expect(solo).toBeLessThan(standard);
+  });
+
+  it("applies 9-hole halving", () => {
+    // 11/2 = 5.5 × 50% = 2.75 → 3.0
+    expect(shamble2v1SoloHandicap(8.0, midPinesBlue, true)).toBe(3.0);
+  });
+});
+
+describe("shamble2v1GroupHandicaps", () => {
+  it("returns 3 values, lowest is 0", () => {
+    // solo 8.0 (50%), partners 14.7 + 10.5 (70% each)
+    const [solo, pA, pB] = shamble2v1GroupHandicaps(8.0, 14.7, 10.5, midPinesBlue);
+    expect(Math.min(solo, pA, pB)).toBe(0);
+    expect([solo, pA, pB].length).toBe(3);
+  });
+
+  it("solo at 50% has lower hcp than 70% partners before normalization", () => {
+    // solo raw = 5.5, partner 10.5 raw = 9.5×70% = 6.5, partner 14.7 raw = 13.5
+    // after normalize: solo is lowest → gets 0
+    const [solo] = shamble2v1GroupHandicaps(8.0, 14.7, 10.5, midPinesBlue);
+    expect(solo).toBe(0);
+  });
+});
+
+describe("scramble2v1SoloHandicap", () => {
+  it("uses 35% allowance (treated as low player only)", () => {
+    // 8.0 → courseHcp 11 → 11 × 35% = 3.85 → 4.0
+    expect(scramble2v1SoloHandicap(8.0, midPinesBlue)).toBe(4.0);
+  });
+
+  it("matches the low-player output from scrambleHandicaps", () => {
+    // scramble2v1 solo should equal the lowPlayingHcp from a normal scramble
+    const { lowPlayingHcp } = scrambleHandicaps(8.0, 14.7, midPinesBlue, { hcp_allowance: 35, hcp_allowance_secondary: 15 });
+    expect(scramble2v1SoloHandicap(8.0, midPinesBlue)).toBe(lowPlayingHcp);
+  });
+
+  it("applies 9-hole halving", () => {
+    // 11/2 = 5.5 × 35% = 1.925 → 2.0
+    expect(scramble2v1SoloHandicap(8.0, midPinesBlue, true)).toBe(2.0);
   });
 });
 
