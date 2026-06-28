@@ -449,3 +449,30 @@ begin
     on conflict (course_tee_id, hole_number) do update set par = excluded.par, stroke_index = excluded.stroke_index;
 end;
 $$;
+
+-- ============================================================
+-- Milestone 8: matchups
+-- ============================================================
+
+create table if not exists matchups (
+  id            uuid primary key default gen_random_uuid(),
+  round_id      uuid not null references rounds(id) on delete cascade,
+  match_number  int not null,
+  -- home = first team listed for the event, away = second
+  home_p1_id    uuid references event_participants(id) on delete set null,
+  home_p2_id    uuid references event_participants(id) on delete set null,
+  away_p1_id    uuid references event_participants(id) on delete set null,
+  away_p2_id    uuid references event_participants(id) on delete set null,
+  status        text not null default 'pending' check (status in ('pending','active','complete')),
+  result        text check (result in ('home','away','halve')),
+  unique (round_id, match_number),
+  created_at    timestamptz not null default now()
+);
+
+alter table matchups enable row level security;
+drop policy if exists "authenticated users can read matchups" on matchups;
+drop policy if exists "admins can manage matchups" on matchups;
+create policy "authenticated users can read matchups" on matchups for select to authenticated using (true);
+create policy "admins can manage matchups" on matchups for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));

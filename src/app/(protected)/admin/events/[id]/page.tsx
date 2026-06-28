@@ -251,6 +251,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <Link href={`/admin/events/${params.id}/rounds/${r.id}/matchups`}
+                className="text-sm text-navy/60 hover:text-navy">
+                Matchups ›
+              </Link>
               <Link href={`/admin/events/${params.id}/rounds/${r.id}`}
                 className="text-sm text-navy/60 hover:text-navy">
                 Edit ›
