@@ -37,11 +37,34 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const linkedCourseIds = new Set(eventCourses.map((ec) => ec.course_id));
   const availableCourses = (allCourses ?? []).filter((c) => !linkedCourseIds.has(c.id));
 
+  // Tee sets for courses linked to this event (for round add form)
+  const { data: teesRaw } = await supabase
+    .from("course_tees")
+    .select("id, tee_name, course_id, courses(name)")
+    .in("course_id", Array.from(linkedCourseIds).length > 0 ? Array.from(linkedCourseIds) : ["00000000-0000-0000-0000-000000000000"]);
+  const tees = (teesRaw ?? []) as unknown as {
+    id: string; tee_name: string; course_id: string;
+    courses: { name: string } | null;
+  }[];
+
+  const { data: formats } = await supabase.from("formats").select("id, name").order("sort_order");
+
+  const { data: roundsRaw } = await supabase
+    .from("rounds")
+    .select("id, round_number, name, side, played_at, status, course_tees(tee_name, courses(name)), formats(name)")
+    .eq("event_id", params.id)
+    .order("round_number");
+  const rounds = (roundsRaw ?? []) as unknown as {
+    id: string; round_number: number; name: string | null;
+    side: string; played_at: string | null; status: string;
+    course_tees: { tee_name: string; courses: { name: string } | null } | null;
+    formats: { name: string } | null;
+  }[];
+
   const { data: participantCounts } = await supabase
     .from("event_participants")
     .select("team_id")
-    .eq("event_id", params.id)
-;
+    .eq("event_id", params.id);
 
   const countByTeam = (participantCounts ?? []).reduce<Record<string, number>>((acc, ep) => {
     if (ep.team_id) acc[ep.team_id] = (acc[ep.team_id] ?? 0) + 1;
@@ -103,9 +126,39 @@ export default async function EventDetailPage({ params }: { params: { id: string
     revalidatePath(`/admin/events/${params.id}`);
   }
 
+  async function addRound(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { data: existing } = await supabase
+      .from("rounds")
+      .select("round_number")
+      .eq("event_id", params.id)
+      .order("round_number", { ascending: false })
+      .limit(1);
+    const nextNum = ((existing?.[0]?.round_number) ?? 0) + 1;
+    await supabase.from("rounds").insert({
+      event_id:      params.id,
+      course_tee_id: formData.get("course_tee_id") as string,
+      format_id:     formData.get("format_id") as string,
+      round_number:  nextNum,
+      name:          formData.get("name") as string || null,
+      side:          formData.get("side") as string,
+      played_at:     formData.get("played_at") as string || null,
+    });
+    revalidatePath(`/admin/events/${params.id}`);
+  }
+
+  async function deleteRound(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    await supabase.from("rounds").delete().eq("id", formData.get("round_id") as string);
+    revalidatePath(`/admin/events/${params.id}`);
+  }
+
+  const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
+
   return (
     <div className="px-4 py-6 space-y-6">
-      {/* Back */}
       <Link href="/admin/events" className="text-sm text-navy/50 hover:text-navy">← Events</Link>
 
       {/* Edit event */}
@@ -172,6 +225,72 @@ export default async function EventDetailPage({ params }: { params: { id: string
         )}
       </div>
 
+      {/* Rounds */}
+      <div className="space-y-3">
+        <p className="font-semibold text-navy">Rounds</p>
+        {rounds.length === 0 && (
+          <p className="text-sm text-navy/40">No rounds added yet.</p>
+        )}
+        {rounds.map((r) => (
+          <div key={r.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
+            <div>
+              <p className="font-semibold text-navy">
+                Round {r.round_number}{r.name ? ` — ${r.name}` : ""}
+              </p>
+              <p className="text-xs text-navy/50">
+                {r.course_tees?.courses?.name} · {r.course_tees?.tee_name} Tees · {sideLabel[r.side]} · {r.formats?.name}
+                {r.played_at ? ` · ${r.played_at}` : ""}
+              </p>
+            </div>
+            <DeleteButton
+              action={deleteRound}
+              fields={{ round_id: r.id }}
+              confirm={`Delete Round ${r.round_number}?`}
+              label="Delete"
+              className="text-xs text-usa-red hover:underline"
+            />
+          </div>
+        ))}
+
+        {tees.length > 0 && (
+          <form action={addRound} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
+            <p className="font-semibold text-navy text-sm">Add Round</p>
+            <input name="name" placeholder="Label (optional, e.g. Morning)"
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+            <select name="course_tee_id" required
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+              <option value="">Select tee set…</option>
+              {tees.map((t) => (
+                <option key={t.id} value={t.id}>{t.courses?.name} — {t.tee_name} Tees</option>
+              ))}
+            </select>
+            <select name="format_id" required
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+              <option value="">Select format…</option>
+              {(formats ?? []).map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <select name="side" required
+                className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+                <option value="full">Full 18</option>
+                <option value="front">Front 9</option>
+                <option value="back">Back 9</option>
+              </select>
+              <input name="played_at" type="date"
+                className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+            </div>
+            <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+              Add Round
+            </button>
+          </form>
+        )}
+        {tees.length === 0 && (
+          <p className="text-sm text-navy/40">Add a course above before creating rounds.</p>
+        )}
+      </div>
+
       {/* Teams */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Teams</p>
@@ -203,7 +322,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
           );
         })}
 
-        {/* Add team */}
         <form action={addTeam} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
           <p className="font-semibold text-navy text-sm">Add Team</p>
           <input name="name" required placeholder="Team name (e.g. USA)"

@@ -341,6 +341,29 @@ on conflict (name) do update set
   sort_order              = excluded.sort_order;
 
 -- ============================================================
+-- Milestone 6: rounds
+-- ============================================================
+create table if not exists rounds (
+  id             uuid primary key default gen_random_uuid(),
+  event_id       uuid not null references events(id) on delete cascade,
+  course_tee_id  uuid not null references course_tees(id),
+  format_id      uuid not null references formats(id),
+  round_number   integer not null,
+  name           text,
+  side           text not null default 'full' check (side in ('front', 'back', 'full')),
+  played_at      date,
+  status         text not null default 'pending' check (status in ('pending', 'active', 'complete')),
+  unique (event_id, round_number)
+);
+alter table rounds enable row level security;
+drop policy if exists "authenticated users can read rounds" on rounds;
+drop policy if exists "admins can manage rounds" on rounds;
+create policy "authenticated users can read rounds" on rounds for select to authenticated using (true);
+create policy "admins can manage rounds" on rounds for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
 -- SEED: 3 courses (idempotent)
 -- ============================================================
 do $$
