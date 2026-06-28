@@ -248,8 +248,12 @@ create table if not exists courses (
   location   text,
   created_at timestamptz not null default now()
 );
-alter table courses add constraint if not exists courses_name_unique unique (name);
 
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'courses_name_unique') then
+    alter table courses add constraint courses_name_unique unique (name);
+  end if;
+end $$;
 alter table courses enable row level security;
 drop policy if exists "authenticated users can read courses" on courses;
 drop policy if exists "admins can manage courses" on courses;
