@@ -11,6 +11,7 @@ import {
   teamHandicap,
   twoTeamHandicaps,
 } from "@/lib/handicap";
+import { matchOutcome, outcomeBadge, type HoleResult } from "@/lib/matchplay";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,59 +27,43 @@ type ScoreRow = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-type HoleResult = "home" | "away" | "halve" | null;
-
 function holeNums(side: string): number[] {
   if (side === "front") return Array.from({ length: 9 }, (_, i) => i + 1);
   if (side === "back")  return Array.from({ length: 9 }, (_, i) => i + 10);
   return Array.from({ length: 18 }, (_, i) => i + 1);
 }
 
-/**
- * Match-play result label with proper closeout.
- * Walks holes in order tracking the running margin; the match is decided the
- * moment a side leads by more holes than remain (e.g. 2 up with 1 to play = "2&1").
- * `results` must be in hole order; nulls (unscored holes) are skipped.
- */
-function matchScoreLabel(
-  results: HoleResult[],
-  totalHoles: number,
-  homeName: string,
-  awayName: string,
-): string {
-  let diff = 0;   // positive = home ahead
-  let played = 0;
-  for (const r of results) {
-    if (r === null) continue;
-    played++;
-    if (r === "home") diff++;
-    else if (r === "away") diff--;
-    const remaining = totalHoles - played;
-    if (Math.abs(diff) > remaining) {
-      const name = diff > 0 ? homeName : awayName;
-      return remaining === 0
-        ? `${name} wins ${Math.abs(diff)} up`
-        : `${name} wins ${Math.abs(diff)}&${remaining}`;
-    }
+/** Upsert the grid of gross scores from the scorecard form. Shared by save + review actions. */
+async function upsertHoleScores(
+  supabase: ReturnType<typeof createClient>,
+  matchupId: string,
+  formData: FormData,
+) {
+  const nums = (formData.get("hole_numbers") as string).split(",").map(Number);
+  for (const n of nums) {
+    const parse = (key: string) => {
+      const v = formData.get(key) as string;
+      return v !== "" ? parseInt(v) : null;
+    };
+    await supabase.from("hole_scores").upsert({
+      matchup_id:    matchupId,
+      hole_number:   n,
+      home_p1_gross: parse(`hp1_${n}`),
+      home_p2_gross: parse(`hp2_${n}`),
+      away_p1_gross: parse(`ap1_${n}`),
+      away_p2_gross: parse(`ap2_${n}`),
+    }, { onConflict: "matchup_id,hole_number", ignoreDuplicates: false });
   }
-  const remaining = totalHoles - played;
-  if (played < totalHoles) {
-    if (diff === 0) return "All Square";
-    const name = diff > 0 ? homeName : awayName;
-    return `${name} ${Math.abs(diff)} up (${remaining} to play)`;
-  }
-  // All holes played and not clinched early → only reachable when tied.
-  if (diff === 0) return "Halved";
-  const name = diff > 0 ? homeName : awayName;
-  return `${name} wins ${Math.abs(diff)} up`;
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ScorecardPage({
   params,
+  searchParams,
 }: {
   params: { id: string; roundId: string; matchupId: string };
+  searchParams: { review?: string };
 }) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
@@ -293,41 +278,44 @@ export default async function ScorecardPage({
   const orderedResults: HoleResult[] = holes.map((hole) =>
     computeHoleResult(scoreMap[hole.hole_number], hole),
   );
-  let homeWon = 0, awayWon = 0, holesPlayed = 0;
-  for (const result of orderedResults) {
-    if (result !== null) {
-      holesPlayed++;
-      if (result === "home") homeWon++;
-      else if (result === "away") awayWon++;
-    }
-  }
-  const matchLabel = holesPlayed === 0
-    ? null
-    : matchScoreLabel(orderedResults, holes.length, homeLabel, awayLabel);
+  const outcome = matchOutcome(orderedResults, holes.length);
+  const { homeWon, awayWon, holesPlayed } = outcome;
+  const matchLabel = outcomeBadge(outcome, homeLabel, awayLabel);
+  const reviewing = searchParams.review === "1" && holesPlayed > 0;
 
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
 
-  // ── Server action ────────────────────────────────────────────────────────
+  // ── Server actions ─────────────────────────────────────────────────────────
+
+  const scorecardPath = `/admin/events/${params.id}/rounds/${params.roundId}/matchups/${params.matchupId}/scorecard`;
 
   async function saveScores(formData: FormData) {
     "use server";
+    await upsertHoleScores(createClient(), params.matchupId, formData);
+    revalidatePath(scorecardPath);
+  }
+
+  // Save progress, then go to the dedicated review screen.
+  async function saveAndReview(formData: FormData) {
+    "use server";
+    await upsertHoleScores(createClient(), params.matchupId, formData);
+    revalidatePath(scorecardPath);
+    redirect(`${scorecardPath}?review=1`);
+  }
+
+  // Confirm from the review screen: write the derived status/result/score.
+  async function completeMatch(formData: FormData) {
+    "use server";
     const supabase = createClient();
-    const holeNums = (formData.get("hole_numbers") as string).split(",").map(Number);
-    for (const n of holeNums) {
-      const parse = (key: string) => {
-        const v = formData.get(key) as string;
-        return v !== "" ? parseInt(v) : null;
-      };
-      await supabase.from("hole_scores").upsert({
-        matchup_id:    params.matchupId,
-        hole_number:   n,
-        home_p1_gross: parse(`hp1_${n}`),
-        home_p2_gross: parse(`hp2_${n}`),
-        away_p1_gross: parse(`ap1_${n}`),
-        away_p2_gross: parse(`ap2_${n}`),
-      }, { onConflict: "matchup_id,hole_number", ignoreDuplicates: false });
-    }
-    revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups/${params.matchupId}/scorecard`);
+    const result = (formData.get("result") as string) || null;
+    const score  = (formData.get("match_score") as string) || null;
+    await supabase.from("matchups").update({
+      status:      "complete",
+      result,
+      match_score: score,
+    }).eq("id", params.matchupId);
+    revalidatePath(matchupsPath);
+    redirect(matchupsPath);
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -355,6 +343,49 @@ export default async function ScorecardPage({
         </p>
       </div>
 
+      {/* Dedicated review + confirm screen */}
+      {reviewing && (
+        <div className="space-y-4">
+          <div className="rounded-xl bg-navy px-4 py-4 text-center">
+            <p className="text-white/60 text-xs uppercase tracking-wide">Review — Match {matchup.match_number}</p>
+            <p className="text-white font-bold text-2xl mt-1">{matchLabel}</p>
+            <p className="text-white/60 text-xs mt-1">
+              {homeLabel} {homeWon} · {awayWon} {awayLabel} · {holesPlayed} of {holes.length} holes
+            </p>
+          </div>
+
+          {!outcome.decided && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+              ⚠ This match isn&rsquo;t mathematically decided yet ({outcome.remaining} hole{outcome.remaining === 1 ? "" : "s"} without a score). You can still complete it using the current standing.
+            </p>
+          )}
+
+          <div className="rounded-xl border border-hairline bg-white px-4 py-3 text-sm space-y-1">
+            <p className="text-navy/70">Completing this match will set:</p>
+            <ul className="text-navy/60 space-y-0.5 pl-4 list-disc">
+              <li>Status → <span className="font-semibold text-navy">Complete</span></li>
+              <li>Result → <span className="font-semibold text-navy">
+                {outcome.result === "halve" ? "Halved" : `${outcome.result === "home" ? homeLabel : awayLabel} wins`}
+              </span></li>
+              <li>Match score → <span className="font-semibold text-navy">{outcome.score}</span></li>
+            </ul>
+          </div>
+
+          <form action={completeMatch}>
+            <input type="hidden" name="result" value={outcome.result ?? ""} />
+            <input type="hidden" name="match_score" value={outcome.score ?? ""} />
+            <button type="submit" className="w-full rounded-lg bg-europe-green py-2.5 text-sm font-semibold text-white">
+              Confirm &amp; Complete Match
+            </button>
+          </form>
+          <Link href={scorecardPath} className="block text-center text-sm text-navy/50 hover:text-navy">
+            ← Back to scorecard
+          </Link>
+        </div>
+      )}
+
+    {!reviewing && (
+      <>
       {/* Match score badge */}
       {matchLabel && (
         <div className="rounded-xl bg-navy px-4 py-3 text-center">
@@ -733,11 +764,19 @@ export default async function ScorecardPage({
           </table>
         </div>
 
-        <button type="submit"
-          className="mt-4 w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
-          Save Scores
-        </button>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button type="submit" formAction={saveScores}
+            className="w-full rounded-lg border border-navy bg-white py-2 text-sm font-semibold text-navy">
+            Save Progress
+          </button>
+          <button type="submit" formAction={saveAndReview}
+            className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+            Save &amp; Review →
+          </button>
+        </div>
       </form>
+      </>
+    )}
     </div>
   );
 }
