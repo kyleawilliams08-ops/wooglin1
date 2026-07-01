@@ -67,7 +67,7 @@ create policy "admins can delete players"
 -- ── Events ───────────────────────────────────────────────────
 create table if not exists events (
   id          uuid primary key default gen_random_uuid(),
-  year        integer unique not null,
+  year        integer not null,
   name        text not null,
   location    text,
   start_date  date,
@@ -77,6 +77,9 @@ create table if not exists events (
 );
 
 alter table events enable row level security;
+
+-- Multiple events per year are allowed; drop the legacy unique(year) constraint if present.
+alter table events drop constraint if exists events_year_key;
 
 drop policy if exists "authenticated users can read events" on events;
 drop policy if exists "admins can manage events" on events;
@@ -195,14 +198,19 @@ on conflict (email) do update set
   role          = excluded.role;
 
 -- 2025 Event
+-- Idempotent by name (year is no longer unique): update if the seed event exists, else insert.
+update events set
+  location   = 'Pinehurst, NC',
+  start_date = '2025-09-18',
+  end_date   = '2025-09-20',
+  status     = 'complete'
+where name = '12th Annual Wooglin Cup' and year = 2025;
+
 insert into events (year, name, location, start_date, end_date, status)
-values (2025, '12th Annual Wooglin Cup', 'Pinehurst, NC', '2025-09-18', '2025-09-20', 'complete')
-on conflict (year) do update set
-  name       = excluded.name,
-  location   = excluded.location,
-  start_date = excluded.start_date,
-  end_date   = excluded.end_date,
-  status     = excluded.status;
+select 2025, '12th Annual Wooglin Cup', 'Pinehurst, NC', '2025-09-18', '2025-09-20', 'complete'
+where not exists (
+  select 1 from events where name = '12th Annual Wooglin Cup' and year = 2025
+);
 
 -- Teams (delete + re-insert scoped to 2025 event for idempotency)
 do $$
@@ -211,7 +219,7 @@ declare
   v_usa_id   uuid;
   v_eur_id   uuid;
 begin
-  select id into v_event_id from events where year = 2025;
+  select id into v_event_id from events where name = '12th Annual Wooglin Cup' and year = 2025;
 
   -- Remove existing teams for this event (cascades to participants)
   delete from teams where event_id = v_event_id;
@@ -525,7 +533,7 @@ end $$;
 do $$
 declare v_event_id uuid;
 begin
-  select id into v_event_id from events where year = 2025;
+  select id into v_event_id from events where name = '12th Annual Wooglin Cup' and year = 2025;
   if v_event_id is not null then
     delete from event_participants where event_id = v_event_id;
     delete from teams where event_id = v_event_id;

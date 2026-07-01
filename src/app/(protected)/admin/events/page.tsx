@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 
-export default async function AdminEventsPage() {
+export default async function AdminEventsPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -17,7 +21,7 @@ export default async function AdminEventsPage() {
   async function addEvent(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("events").insert({
+    const { error } = await supabase.from("events").insert({
       year:       parseInt(formData.get("year") as string),
       name:       formData.get("name") as string,
       location:   formData.get("location") as string || null,
@@ -25,6 +29,9 @@ export default async function AdminEventsPage() {
       end_date:   formData.get("end_date") as string || null,
       status:     "draft",
     });
+    if (error) {
+      redirect(`/admin/events?error=${encodeURIComponent(error.message)}`);
+    }
     revalidatePath("/admin/events");
   }
 
@@ -40,6 +47,9 @@ export default async function AdminEventsPage() {
 
       <form action={addEvent} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
         <p className="font-semibold text-navy text-sm">New Event</p>
+        {searchParams.error && (
+          <p className="rounded-lg bg-usa-red/10 px-3 py-2 text-sm text-usa-red">{searchParams.error}</p>
+        )}
         <input name="year"       required placeholder="Year (e.g. 2026)" type="number" className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
         <input name="name"       required placeholder="Event name"                     className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
         <input name="location"            placeholder="Location"                       className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
