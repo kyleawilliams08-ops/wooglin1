@@ -26,20 +26,51 @@ type ScoreRow = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+type HoleResult = "home" | "away" | "halve" | null;
+
 function holeNums(side: string): number[] {
   if (side === "front") return Array.from({ length: 9 }, (_, i) => i + 1);
   if (side === "back")  return Array.from({ length: 9 }, (_, i) => i + 10);
   return Array.from({ length: 18 }, (_, i) => i + 1);
 }
 
-function matchScoreLabel(homeWon: number, awayWon: number, holesLeft: number): string {
-  const diff = homeWon - awayWon;
-  if (diff === 0) return holesLeft === 0 ? "All Square" : "All Square";
-  const side = diff > 0 ? "Home" : "Away";
-  const up = Math.abs(diff);
-  if (holesLeft === 0) return `${side} wins 1 up`;
-  if (up > holesLeft) return `${side} wins ${up}&${holesLeft}`;
-  return `${side} ${up} up (${holesLeft} to play)`;
+/**
+ * Match-play result label with proper closeout.
+ * Walks holes in order tracking the running margin; the match is decided the
+ * moment a side leads by more holes than remain (e.g. 2 up with 1 to play = "2&1").
+ * `results` must be in hole order; nulls (unscored holes) are skipped.
+ */
+function matchScoreLabel(
+  results: HoleResult[],
+  totalHoles: number,
+  homeName: string,
+  awayName: string,
+): string {
+  let diff = 0;   // positive = home ahead
+  let played = 0;
+  for (const r of results) {
+    if (r === null) continue;
+    played++;
+    if (r === "home") diff++;
+    else if (r === "away") diff--;
+    const remaining = totalHoles - played;
+    if (Math.abs(diff) > remaining) {
+      const name = diff > 0 ? homeName : awayName;
+      return remaining === 0
+        ? `${name} wins ${Math.abs(diff)} up`
+        : `${name} wins ${Math.abs(diff)}&${remaining}`;
+    }
+  }
+  const remaining = totalHoles - played;
+  if (played < totalHoles) {
+    if (diff === 0) return "All Square";
+    const name = diff > 0 ? homeName : awayName;
+    return `${name} ${Math.abs(diff)} up (${remaining} to play)`;
+  }
+  // All holes played and not clinched early → only reachable when tied.
+  if (diff === 0) return "Halved";
+  const name = diff > 0 ? homeName : awayName;
+  return `${name} wins ${Math.abs(diff)} up`;
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -96,6 +127,8 @@ export default async function ScorecardPage({
     .from("teams").select("id, name, color").eq("event_id", params.id).order("name");
   const homeTeam = teams?.[0];
   const awayTeam = teams?.[1];
+  const homeLabel = homeTeam?.name ?? "Home";
+  const awayLabel = awayTeam?.name ?? "Away";
 
   // Holes
   const holes: HoleRow[] = [];
@@ -218,8 +251,6 @@ export default async function ScorecardPage({
 
   // ── Per-hole result computation ─────────────────────────────────────────
 
-  type HoleResult = "home" | "away" | "halve" | null;
-
   function computeHoleResult(s: ScoreRow | undefined, hole: HoleRow): HoleResult {
     if (!s) return null;
     const si = hole.stroke_index;
@@ -258,18 +289,21 @@ export default async function ScorecardPage({
     return bestH < bestA ? "home" : bestA < bestH ? "away" : "halve";
   }
 
-  // Running match score
+  // Running match score — results in hole order so closeout can be detected
+  const orderedResults: HoleResult[] = holes.map((hole) =>
+    computeHoleResult(scoreMap[hole.hole_number], hole),
+  );
   let homeWon = 0, awayWon = 0, holesPlayed = 0;
-  for (const hole of holes) {
-    const result = computeHoleResult(scoreMap[hole.hole_number], hole);
+  for (const result of orderedResults) {
     if (result !== null) {
       holesPlayed++;
       if (result === "home") homeWon++;
       else if (result === "away") awayWon++;
     }
   }
-  const holesLeft = holes.length - holesPlayed;
-  const matchLabel = holesPlayed === 0 ? null : matchScoreLabel(homeWon, awayWon, holesLeft);
+  const matchLabel = holesPlayed === 0
+    ? null
+    : matchScoreLabel(orderedResults, holes.length, homeLabel, awayLabel);
 
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
 
@@ -303,10 +337,6 @@ export default async function ScorecardPage({
   };
 
   const inputCls = "w-10 rounded border border-hairline px-1 py-1 text-center text-sm text-navy focus:border-navy focus:outline-none";
-
-  // Column headers for score section
-  const homeLabel = homeTeam?.name ?? "Home";
-  const awayLabel = awayTeam?.name ?? "Away";
 
   return (
     <div className="px-4 py-6 space-y-4">
