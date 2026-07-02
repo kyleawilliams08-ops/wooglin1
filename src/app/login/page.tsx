@@ -42,6 +42,11 @@ function LoginForm() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-navy px-6">
       <div className="w-full max-w-sm">
+        {/* Crest on a white badge so the navy dragon reads on the navy page */}
+        <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-off-white ring-2 ring-gold/60 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/crest-small.png" alt="Wooglin Cup crest" width={80} height={80} />
+        </div>
         <h1 className="mb-1 text-center text-2xl font-display font-bold text-off-white">
           Wooglin Cup Clubhouse
         </h1>

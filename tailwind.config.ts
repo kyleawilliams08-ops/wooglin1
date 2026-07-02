@@ -17,6 +17,7 @@ const config: Config = {
         "off-white": "#FDFDFD",
         parchment: "#F4F1EA",
         hairline: "#E4E0D6",
+        gold: "#C3A669",
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],
