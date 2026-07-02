@@ -539,3 +539,59 @@ begin
     delete from teams where event_id = v_event_id;
   end if;
 end $$;
+
+-- ============================================================
+-- Milestone 10: live scoreboard + player scoring
+-- ============================================================
+
+-- Scoring exception (architecture doc): any player IN a match can enter/edit
+-- that match's hole scores. Admin policy above already covers admins.
+drop policy if exists "match participants can score their match" on hole_scores;
+create policy "match participants can score their match" on hole_scores
+  for all to authenticated
+  using (exists (
+    select 1 from matchups m
+    join event_participants ep
+      on ep.id in (m.home_p1_id, m.home_p2_id, m.away_p1_id, m.away_p2_id)
+    join players p on p.id = ep.player_id
+    where m.id = hole_scores.matchup_id
+      and p.auth_user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from matchups m
+    join event_participants ep
+      on ep.id in (m.home_p1_id, m.home_p2_id, m.away_p1_id, m.away_p2_id)
+    join players p on p.id = ep.player_id
+    where m.id = hole_scores.matchup_id
+      and p.auth_user_id = auth.uid()
+  ));
+
+-- Participants can complete their own match (status/result/match_score).
+drop policy if exists "match participants can update their matchup" on matchups;
+create policy "match participants can update their matchup" on matchups
+  for update to authenticated
+  using (exists (
+    select 1 from event_participants ep
+    join players p on p.id = ep.player_id
+    where ep.id in (matchups.home_p1_id, matchups.home_p2_id, matchups.away_p1_id, matchups.away_p2_id)
+      and p.auth_user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from event_participants ep
+    join players p on p.id = ep.player_id
+    where ep.id in (matchups.home_p1_id, matchups.home_p2_id, matchups.away_p1_id, matchups.away_p2_id)
+      and p.auth_user_id = auth.uid()
+  ));
+
+-- Realtime: publish changes so the live scoreboard updates without refresh.
+do $$
+begin
+  alter publication supabase_realtime add table hole_scores;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table matchups;
+exception when duplicate_object then null;
+end $$;
