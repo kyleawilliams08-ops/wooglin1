@@ -20,6 +20,16 @@ export default async function PlayerProfilePage({
     .single();
   if (!player) redirect("/players");
 
+  // Backfilled appearance history (2014+ spreadsheet): year + cup result
+  const { data: appearances } = await supabase
+    .from("player_appearances")
+    .select("year, result")
+    .eq("player_id", params.id)
+    .order("year", { ascending: false });
+  const cupWins   = appearances?.filter((a) => a.result === "W").length ?? 0;
+  const cupLosses = appearances?.filter((a) => a.result === "L").length ?? 0;
+  const cupTies   = appearances?.filter((a) => a.result === "T").length ?? 0;
+
   // Every event this player has been part of (team history)
   const { data: epsRaw } = await supabase
     .from("event_participants")
@@ -131,41 +141,64 @@ export default async function PlayerProfilePage({
         <p className="text-sm text-navy/50 mt-0.5 uppercase tracking-wide">{player.role}</p>
       </div>
 
-      {/* Index + record */}
+      {/* Index + career stats (appearances + cup record from the backfill) */}
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="rounded-xl border border-hairline bg-white px-2 py-3">
           <p className="text-2xl font-bold text-navy tabular-nums">{player.current_index ?? "—"}</p>
           <p className="text-xs text-navy/50 mt-0.5">Index</p>
         </div>
         <div className="rounded-xl border border-hairline bg-white px-2 py-3">
-          <p className="text-2xl font-bold text-navy tabular-nums">{wins}–{losses}–{ties}</p>
-          <p className="text-xs text-navy/50 mt-0.5">W–L–T</p>
+          <p className="text-2xl font-bold text-navy tabular-nums">{appearances?.length ?? 0}</p>
+          <p className="text-xs text-navy/50 mt-0.5">Appearances</p>
         </div>
         <div className="rounded-xl border border-hairline bg-white px-2 py-3">
-          <p className="text-2xl font-bold text-navy tabular-nums">{played > 0 ? points : "—"}</p>
-          <p className="text-xs text-navy/50 mt-0.5">Points</p>
+          <p className="text-2xl font-bold text-navy tabular-nums">
+            {cupWins}–{cupLosses}{cupTies > 0 ? `–${cupTies}` : ""}
+          </p>
+          <p className="text-xs text-navy/50 mt-0.5">Cup Record</p>
         </div>
       </div>
 
-      {/* Team history */}
-      {eps.length > 0 && (
+      {/* Cup history: backfilled years, with team chip where the app knows it */}
+      {(appearances?.length ?? 0) > 0 && (
         <div>
           <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-2">Cups</p>
           <ul className="space-y-2">
-            {[...eps]
-              .sort((a, b) => (b.events?.year ?? 0) - (a.events?.year ?? 0))
-              .map((e) => (
-                <li key={e.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
-                  <p className="text-sm font-semibold text-navy">
-                    {e.events?.year} · {e.events?.name}
+            {appearances!.map((a) => {
+              const ep = eps.find((e) => e.events?.year === a.year);
+              return (
+                <li key={a.year} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
+                  <p className="text-sm font-semibold text-navy tabular-nums">
+                    {a.year}
+                    {ep?.events?.name && <span className="font-normal text-navy/50"> · {ep.events.name}</span>}
                   </p>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-white"
-                    style={{ backgroundColor: e.teams?.color ?? "#0C2D55" }}>
-                    {e.teams?.name ?? "—"}{e.is_captain ? " · C" : ""}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {ep?.teams && (
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-white"
+                        style={{ backgroundColor: ep.teams.color }}>
+                        {ep.teams.name}{ep.is_captain ? " · C" : ""}
+                      </span>
+                    )}
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                      a.result === "W" ? "bg-europe-green/15 text-europe-green"
+                      : a.result === "L" ? "bg-usa-red/15 text-usa-red"
+                      : "bg-hairline text-navy/60"
+                    }`}>
+                      {a.result === "W" ? "Won" : a.result === "L" ? "Lost" : "Tied"}
+                    </span>
+                  </div>
                 </li>
-              ))}
+              );
+            })}
           </ul>
+        </div>
+      )}
+
+      {/* App-tracked match record (2025 onward) */}
+      {played > 0 && (
+        <div className="rounded-xl border border-hairline bg-parchment px-4 py-3 flex items-center justify-between">
+          <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">Match record</p>
+          <p className="text-sm font-bold text-navy tabular-nums">{wins}–{losses}–{ties} · {points} pts</p>
         </div>
       )}
 
