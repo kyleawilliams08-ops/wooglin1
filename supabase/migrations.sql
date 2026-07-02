@@ -595,3 +595,32 @@ begin
   alter publication supabase_realtime add table matchups;
 exception when duplicate_object then null;
 end $$;
+
+-- ============================================================
+-- Milestone 11: history archive (lightweight backfill)
+-- ============================================================
+
+-- One row per cup year. Past years (2014-2024) are free-text backfill;
+-- event_id optionally links years that exist as full events in the app.
+create table if not exists event_results (
+  id          uuid primary key default gen_random_uuid(),
+  year        integer unique not null,
+  event_id    uuid references events(id) on delete set null,
+  winner      text not null,        -- 'USA' | 'Europe' | 'Tie'
+  final_score text,                 -- e.g. '14.5 – 13.5'
+  location    text,
+  captains    text,                 -- free text, e.g. 'Ryan (USA) · Brendan (Europe)'
+  roster      text,                 -- free text participant list
+  notes       text,
+  created_at  timestamptz not null default now()
+);
+
+alter table event_results enable row level security;
+drop policy if exists "authenticated users can read event_results" on event_results;
+drop policy if exists "admins can manage event_results" on event_results;
+create policy "authenticated users can read event_results"
+  on event_results for select to authenticated using (true);
+create policy "admins can manage event_results"
+  on event_results for all to authenticated
+  using (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));

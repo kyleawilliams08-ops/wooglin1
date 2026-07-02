@@ -11,6 +11,7 @@ export default async function AdminPage() {
     { href: "/admin/events",  label: "Events",  desc: "Create and manage events, teams, and rosters" },
     { href: "/admin/courses", label: "Courses", desc: "Manage courses, tees, and hole data" },
     { href: "/admin/formats", label: "Formats", desc: "Adjust handicap allowances per format" },
+    { href: "/admin/history", label: "History", desc: "Backfill past cup results" },
   ];
 
   return (
