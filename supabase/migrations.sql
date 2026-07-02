@@ -845,3 +845,38 @@ from (values
 ) as v(nickname, year, result)
 join players p on p.nickname = v.nickname
 on conflict (player_id, year) do update set result = excluded.result;
+
+-- ============================================================
+-- Milestone 11c: seed past cup results (champions slide + sheet locations)
+-- Rosters listed are the WINNING team, normalized to app nicknames
+-- (slide "Kevin" = Lars, "Jared" = Shoops, "David" = Dave,
+--  "Greg" = Greg Stribos, "Sam" = SammyT).
+-- ============================================================
+
+insert into event_results (year, winner, location, captains, roster) values
+  (2024, 'Europe', 'Pawleys',     'JoeG © (Europe)',    'JoeG ©, Moore, Holt, JC, Leamer, Boynton, Kaplan, Ryan'),
+  (2023, 'Europe', 'Kiawah',      'Kyle © (Europe)',    'Kyle ©, Joey, JC, Boynton, Stribos, SammyT'),
+  (2022, 'USA',    'Pawleys',     'Joey © (USA)',       'Joey ©, AJ, Boynton, JoeG, Lars, Kyle, Ryan, SammyT'),
+  (2021, 'Europe', 'Scottsdale',  'Kaplan © (Europe)',  'Kaplan ©, AJ, Moore, Greg Stribos, Joey, JC, Lars, Boynton'),
+  (2020, 'USA',    'St Simons',   'Boynton © (USA)',    'Boynton ©, Joey, Allred, Stribos, Rob, SammyT'),
+  (2019, 'Europe', 'HHI',         'AJ © (Europe)',      'AJ ©, Allen, Charlie, Connor, Dave, Drew, Joey, Leamer, Boynton'),
+  (2018, 'Europe', 'Pawleys',     'Moore © (Europe)',   'Moore ©, Holt, Stribos, Joey, Allred, Boynton'),
+  (2017, 'Europe', 'HHI',         'Hugh © (Europe)',    'Hugh ©, Kaplan, JC, Moore, Kyle'),
+  (2016, 'USA',    'Lake Oconee', 'Allen © (USA)',      'Allen ©, Moore, Brendan, Shoops, Jason, JC, Lars, Kyle'),
+  (2015, 'USA',    'HHI',         'Allen © (USA)',      'Allen ©, AJ, Moore, Brendan, Connor, Kyle, JC, Ryan'),
+  (2014, 'Europe', 'HHI',         null,                 'Connor, Kaplan, Leamer, Ross, Ryan, Stribos')
+on conflict (year) do update set
+  winner   = excluded.winner,
+  location = excluded.location,
+  captains = excluded.captains,
+  roster   = excluded.roster;
+
+-- 2025 lives in the app as a full event; link it and record the result.
+insert into event_results (year, winner, location, captains, event_id)
+select 2025, 'Europe', 'Pinehurst', 'Ryan © (Europe)',
+       (select id from events where name = '12th Annual Wooglin Cup' and year = 2025 limit 1)
+on conflict (year) do update set
+  winner   = excluded.winner,
+  location = excluded.location,
+  captains = excluded.captains,
+  event_id = excluded.event_id;
