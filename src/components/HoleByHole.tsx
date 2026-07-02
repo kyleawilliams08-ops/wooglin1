@@ -61,9 +61,11 @@ export function HoleByHole({
 }) {
   const [scores, setScores] = useState<Scores>(initialScores);
   const [idx, setIdx] = useState(Math.min(Math.max(startIndex, 0), holes.length - 1));
+  const [dir, setDir] = useState<1 | -1>(1); // last navigation direction, for the slide animation
   const [expanded, setExpanded] = useState<SlotKey | null>(null);
   const [, startTransition] = useTransition();
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   // Adopt server state on realtime refreshes (a save echoes back our own value).
   useEffect(() => { setScores(initialScores); }, [initialScores]);
@@ -103,14 +105,34 @@ export function HoleByHole({
     const complete = slots.every((sl) => next[h.n]?.[sl.key] != null);
     if (complete && idx < holes.length - 1 && value != null) {
       if (advanceTimer.current) clearTimeout(advanceTimer.current);
-      advanceTimer.current = setTimeout(() => setIdx((i) => Math.min(i + 1, holes.length - 1)), 450);
+      advanceTimer.current = setTimeout(() => {
+        setDir(1);
+        setIdx((i) => Math.min(i + 1, holes.length - 1));
+      }, 450);
     }
   };
 
   const goTo = (i: number) => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    const clamped = Math.min(Math.max(i, 0), holes.length - 1);
+    setDir(clamped >= idx ? 1 : -1);
     setExpanded(null);
-    setIdx(Math.min(Math.max(i, 0), holes.length - 1));
+    setIdx(clamped);
+  };
+
+  // Swipe between holes: horizontal drag > 60px that isn't a vertical scroll.
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0) goTo(idx + 1); // swipe left → next hole
+    else goTo(idx - 1);        // swipe right → previous hole
   };
 
   const teamColor = (side: "home" | "away") =>
@@ -128,7 +150,7 @@ export function HoleByHole({
   };
 
   return (
-    <div className="px-4 py-5 pb-8 space-y-4">
+    <div className="px-4 py-5 pb-8 space-y-4" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">← Live</Link>
@@ -167,6 +189,9 @@ export function HoleByHole({
           );
         })}
       </div>
+
+      {/* Per-hole content: keyed so hole changes replay the slide-in */}
+      <div key={idx} className={`space-y-4 ${dir === 1 ? "hole-in-fwd" : "hole-in-back"}`}>
 
       {/* Current hole header */}
       <div className="flex items-end justify-between">
@@ -268,6 +293,8 @@ export function HoleByHole({
           {results[idx] === "halve" ? "Hole halved" : `Hole to ${results[idx] === "home" ? homeLabel : awayLabel}`}
         </p>
       )}
+
+      </div>
 
       {/* Prev / Next */}
       <div className="grid grid-cols-2 gap-3">

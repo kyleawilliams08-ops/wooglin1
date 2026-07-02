@@ -25,3 +25,15 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Hole-by-hole scorer: slide-in when swiping between holes */
+@keyframes hole-in-fwd {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hole-in-back {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: none; }
+}
+.hole-in-fwd  { animation: hole-in-fwd 180ms ease-out; }
+.hole-in-back { animation: hole-in-back 180ms ease-out; }
