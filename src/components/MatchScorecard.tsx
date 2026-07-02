@@ -12,6 +12,7 @@ import {
   type GrossScores,
 } from "@/lib/matchcalc";
 import { matchOutcome, outcomeBadge } from "@/lib/matchplay";
+import { ScoreInput } from "@/components/ScoreInput";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -293,8 +294,6 @@ export async function MatchScorecard({
     halve: { label: "½", color: null },
   };
 
-  const inputCls = "w-10 rounded border border-hairline px-1 py-1 text-center text-sm text-navy focus:border-navy focus:outline-none disabled:bg-parchment disabled:text-navy/60";
-
   return (
     <div className="px-4 py-6 space-y-4">
       <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">
@@ -574,8 +573,10 @@ export async function MatchScorecard({
                         <td className="px-2 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`hp1_${hole.hole_number}_${s?.home_p1_gross ?? ""}`}
+                                name={`hp1_${hole.hole_number}`} defaultValue={s?.home_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${homeLabel}`} />
                               {strokeMarks(homeTeamPhcp ?? 0, si)}
                             </div>
                             {net(s?.home_p1_gross, homeTeamPhcp ?? 0) != null && (
@@ -587,8 +588,10 @@ export async function MatchScorecard({
                         <td className="px-2 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`ap1_${hole.hole_number}_${s?.away_p1_gross ?? ""}`}
+                                name={`ap1_${hole.hole_number}`} defaultValue={s?.away_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${awayLabel}`} />
                               {strokeMarks(awayTeamPhcp ?? 0, si)}
                             </div>
                             {net(s?.away_p1_gross, awayTeamPhcp ?? 0) != null && (
@@ -602,8 +605,10 @@ export async function MatchScorecard({
                         <td className="px-2 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`hp1_${hole.hole_number}_${s?.home_p1_gross ?? ""}`}
+                                name={`hp1_${hole.hole_number}`} defaultValue={s?.home_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.home_p1?.display_name ?? homeLabel}`} />
                               {strokeMarks(homeP1Phcp, si)}
                             </div>
                             {net(s?.home_p1_gross, homeP1Phcp) != null && (
@@ -614,8 +619,10 @@ export async function MatchScorecard({
                         <td className="px-2 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`ap1_${hole.hole_number}_${s?.away_p1_gross ?? ""}`}
+                                name={`ap1_${hole.hole_number}`} defaultValue={s?.away_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.away_p1?.display_name ?? awayLabel}`} />
                               {strokeMarks(awayP1Phcp, si)}
                             </div>
                             {net(s?.away_p1_gross, awayP1Phcp) != null && (
@@ -630,8 +637,10 @@ export async function MatchScorecard({
                         <td className="px-1 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`hp1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.home_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`hp1_${hole.hole_number}_${s?.home_p1_gross ?? ""}`}
+                                name={`hp1_${hole.hole_number}`} defaultValue={s?.home_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.home_p1?.display_name ?? homeLabel}`} />
                               {strokeMarks(homeP1Phcp, si)}
                             </div>
                             {net(s?.home_p1_gross, homeP1Phcp) != null && (
@@ -643,8 +652,10 @@ export async function MatchScorecard({
                           <td className="px-1 py-1">
                             <div className="flex flex-col items-center gap-0.5">
                               <div className="flex items-center gap-0.5">
-                                <input name={`hp2_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                  defaultValue={s?.home_p2_gross ?? ""} className={inputCls} />
+                                <ScoreInput key={`hp2_${hole.hole_number}_${s?.home_p2_gross ?? ""}`}
+                                  name={`hp2_${hole.hole_number}`} defaultValue={s?.home_p2_gross ?? null}
+                                  par={hole.par} disabled={!canScore}
+                                  sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.home_p2.display_name}`} />
                                 {homeP2Phcp != null && strokeMarks(homeP2Phcp, si)}
                               </div>
                               {homeP2Phcp != null && net(s?.home_p2_gross, homeP2Phcp) != null && (
@@ -656,8 +667,10 @@ export async function MatchScorecard({
                         <td className="px-1 py-1">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="flex items-center gap-0.5">
-                              <input name={`ap1_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                defaultValue={s?.away_p1_gross ?? ""} className={inputCls} />
+                              <ScoreInput key={`ap1_${hole.hole_number}_${s?.away_p1_gross ?? ""}`}
+                                name={`ap1_${hole.hole_number}`} defaultValue={s?.away_p1_gross ?? null}
+                                par={hole.par} disabled={!canScore}
+                                sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.away_p1?.display_name ?? awayLabel}`} />
                               {strokeMarks(awayP1Phcp, si)}
                             </div>
                             {net(s?.away_p1_gross, awayP1Phcp) != null && (
@@ -669,8 +682,10 @@ export async function MatchScorecard({
                           <td className="px-1 py-1">
                             <div className="flex flex-col items-center gap-0.5">
                               <div className="flex items-center gap-0.5">
-                                <input name={`ap2_${hole.hole_number}`} type="number" min="1" max="15" disabled={!canScore}
-                                  defaultValue={s?.away_p2_gross ?? ""} className={inputCls} />
+                                <ScoreInput key={`ap2_${hole.hole_number}_${s?.away_p2_gross ?? ""}`}
+                                  name={`ap2_${hole.hole_number}`} defaultValue={s?.away_p2_gross ?? null}
+                                  par={hole.par} disabled={!canScore}
+                                  sheetLabel={`Hole ${hole.hole_number} · Par ${hole.par} — ${matchup.away_p2.display_name}`} />
                                 {awayP2Phcp != null && strokeMarks(awayP2Phcp, si)}
                               </div>
                               {awayP2Phcp != null && net(s?.away_p2_gross, awayP2Phcp) != null && (
