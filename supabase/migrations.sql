@@ -873,7 +873,7 @@ on conflict (year) do update set
 
 -- 2025 lives in the app as a full event; link it and record the result.
 insert into event_results (year, winner, location, captains, event_id)
-select 2025, 'Europe', 'Pinehurst', 'Ryan © (Europe)',
+select 2025, 'USA', 'Pinehurst', 'Ryan © (USA)',
        (select id from events where name = '12th Annual Wooglin Cup' and year = 2025 limit 1)
 on conflict (year) do update set
   winner   = excluded.winner,
