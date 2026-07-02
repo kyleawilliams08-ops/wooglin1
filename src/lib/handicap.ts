@@ -46,19 +46,26 @@ export function playingHandicap(
 
 /**
  * How many strokes a player receives on a specific hole.
- * Returns 0, 0.5, 1, 1.5, or 2.
+ * Returns 0, 0.5, 1, 1.5, or 2 (more for extreme handicaps).
  *
  * Half strokes arise when playingHcp has a .5 fractional part (e.g. 3.5).
  * The half stroke is allocated to the next-hardest hole after the full strokes.
  * In match play a half stroke means: if you would otherwise tie, you win.
  *
- * For 9-hole rounds pass the re-ranked SI (1–9) not the raw 18-hole SI.
- * Use nineHoleSIRank() to convert before calling this function.
+ * When playingHcp exceeds holesInRound, strokes wrap: e.g. 11 over 9 holes =
+ * 1 stroke everywhere plus a 2nd stroke on the 2 hardest holes.
+ *
+ * For 9-hole rounds pass the re-ranked SI (1–9, via nineHoleSIRank()) and
+ * holesInRound = 9 so the wraparound uses the right base.
  */
-export function strokesGivenOnHole(playingHcp: number, strokeIndex: number): number {
+export function strokesGivenOnHole(
+  playingHcp: number,
+  strokeIndex: number,
+  holesInRound = 18,
+): number {
   if (playingHcp <= 0) return 0;
-  const full        = Math.floor(playingHcp / 18);
-  const remaining   = playingHcp % 18;
+  const full        = Math.floor(playingHcp / holesInRound);
+  const remaining   = playingHcp % holesInRound;
   const fullStrokes = Math.floor(remaining);
   const halfStroke  = remaining % 1; // 0 or 0.5
 
@@ -84,8 +91,13 @@ export function nineHoleSIRank(rawSI: number, allHoleSIs: number[]): number {
 /**
  * Net score on a hole: gross minus strokes received.
  */
-export function netScore(gross: number, playingHcp: number, strokeIndex: number): number {
-  return gross - strokesGivenOnHole(playingHcp, strokeIndex);
+export function netScore(
+  gross: number,
+  playingHcp: number,
+  strokeIndex: number,
+  holesInRound = 18,
+): number {
+  return gross - strokesGivenOnHole(playingHcp, strokeIndex, holesInRound);
 }
 
 // ---------------------------------------------------------------------------

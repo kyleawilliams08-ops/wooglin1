@@ -151,6 +151,33 @@ describe("strokesGivenOnHole", () => {
     expect(strokesGivenOnHole(3.5, 5)).toBe(0);
   });
 
+  it("wraps at 9 for 9-hole rounds: 11 hcp = 2 strokes on SI rank 1–2, 1 elsewhere", () => {
+    // e.g. Zach: playing hcp 11 in a 9-hole Best Ball
+    expect(strokesGivenOnHole(11, 1, 9)).toBe(2);
+    expect(strokesGivenOnHole(11, 2, 9)).toBe(2);
+    for (let si = 3; si <= 9; si++) {
+      expect(strokesGivenOnHole(11, si, 9)).toBe(1);
+    }
+  });
+
+  it("9-hole: exactly 9 hcp gives 1 stroke on every hole, no doubles", () => {
+    for (let si = 1; si <= 9; si++) {
+      expect(strokesGivenOnHole(9, si, 9)).toBe(1);
+    }
+  });
+
+  it("9-hole: half strokes wrap too (9.5 hcp → 1½ on SI rank 1)", () => {
+    expect(strokesGivenOnHole(9.5, 1, 9)).toBe(1.5);
+    expect(strokesGivenOnHole(9.5, 2, 9)).toBe(1);
+  });
+
+  it("total strokes across 9 holes equals playingHcp when it exceeds 9", () => {
+    const hcp = 11;
+    const total = Array.from({ length: 9 }, (_, i) => strokesGivenOnHole(hcp, i + 1, 9))
+      .reduce((a, b) => a + b, 0);
+    expect(total).toBe(hcp);
+  });
+
   it("total strokes across 18 holes equals playingHcp for whole numbers", () => {
     const hcp = 7;
     const total = Array.from({ length: 18 }, (_, i) => strokesGivenOnHole(hcp, i + 1))
