@@ -108,7 +108,7 @@ export function HoleByHole({
       advanceTimer.current = setTimeout(() => {
         setDir(1);
         setIdx((i) => Math.min(i + 1, holes.length - 1));
-      }, 450);
+      }, 2000);
     }
   };
 
