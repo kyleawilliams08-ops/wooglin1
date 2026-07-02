@@ -10,6 +10,7 @@ import {
   nineHoleSIRank,
   teamHandicap,
   twoTeamHandicaps,
+  roundToHalf,
 } from "@/lib/handicap";
 import { matchOutcome, outcomeBadge, type HoleResult } from "@/lib/matchplay";
 
@@ -332,6 +333,22 @@ export default async function ScorecardPage({
     redirect(matchupsPath);
   }
 
+  // Spell out every step of the playing-hcp math, mirroring playingHandicap():
+  // course → (9-hole ÷2) → × format % → rounded to 0.5
+  const fmtNum = (n: number) => `${Math.round(n * 100) / 100}`;
+  const hcpChain = (courseHcp: number, pctUsed: number, tag?: string) => {
+    const base = nineHole ? courseHcp / 2 : courseHcp;
+    const raw = base * (pctUsed / 100);
+    const rounded = roundToHalf(raw);
+    const pctLabel = tag ? `× ${pctUsed}% (${tag})` : `× ${pctUsed}%`;
+    return [
+      `course ${fmtNum(courseHcp)}`,
+      ...(nineHole ? [`9-hole ${fmtNum(courseHcp / 2)}`] : []),
+      `${pctLabel} = ${fmtNum(raw)}`,
+      `rounds to ${fmtNum(rounded)}`,
+    ].join(" → ");
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   // Res column: team abbreviation + color dot instead of generic H/A
@@ -438,18 +455,18 @@ export default async function ScorecardPage({
             <div className="text-navy/60 space-y-0.5">
               {matchup.home_p1 && (
                 <p>
-                  {matchup.home_p1.display_name}: course hcp {hp1CH}
+                  {matchup.home_p1.display_name}:{" "}
                   {fmt.name === "Scramble"
-                    ? ` × ${hp1CH <= (hp2CH ?? 999) ? pct : pct2}% (${hp1CH <= (hp2CH ?? 999) ? "low" : "high"}) = ${playingHandicap(hp1CH, hp1CH <= (hp2CH ?? 999) ? pct : pct2, nineHole)}`
-                    : ` × ${pct}% = ${playingHandicap(hp1CH, pct, nineHole)}`}
+                    ? hcpChain(hp1CH, hp1CH <= (hp2CH ?? 999) ? pct : pct2, hp1CH <= (hp2CH ?? 999) ? "low" : "high")
+                    : hcpChain(hp1CH, pct)}
                 </p>
               )}
               {matchup.home_p2 && hp2CH !== null && (
                 <p>
-                  {matchup.home_p2.display_name}: course hcp {hp2CH}
+                  {matchup.home_p2.display_name}:{" "}
                   {fmt.name === "Scramble"
-                    ? ` × ${hp2CH < hp1CH ? pct : pct2}% (${hp2CH < hp1CH ? "low" : "high"}) = ${playingHandicap(hp2CH, hp2CH < hp1CH ? pct : pct2, nineHole)}`
-                    : ` × ${pct}% = ${playingHandicap(hp2CH, pct, nineHole)}`}
+                    ? hcpChain(hp2CH, hp2CH < hp1CH ? pct : pct2, hp2CH < hp1CH ? "low" : "high")
+                    : hcpChain(hp2CH, pct)}
                 </p>
               )}
               <p className="font-semibold text-navy pt-0.5">
@@ -458,12 +475,12 @@ export default async function ScorecardPage({
             </div>
           ) : fmt.name === "Singles" ? (
             <p className="text-navy/60">
-              {matchup.home_p1?.display_name}: course hcp {hp1CH} × {pct}% = playing hcp {homeP1Phcp}
+              {matchup.home_p1?.display_name}: {hcpChain(hp1CH, pct)} → plays {homeP1Phcp} (normalized)
             </p>
           ) : (
             <div className="text-navy/60 space-y-0.5">
-              {matchup.home_p1 && <p>{matchup.home_p1.display_name}: course hcp {hp1CH} × {pct}% → playing hcp {homeP1Phcp}</p>}
-              {matchup.home_p2 && homeP2Phcp != null && <p>{matchup.home_p2.display_name}: course hcp {hp2CH ?? 0} × {pct}% → playing hcp {homeP2Phcp}</p>}
+              {matchup.home_p1 && <p>{matchup.home_p1.display_name}: {hcpChain(hp1CH, pct)} → plays {homeP1Phcp} (normalized)</p>}
+              {matchup.home_p2 && homeP2Phcp != null && <p>{matchup.home_p2.display_name}: {hcpChain(hp2CH ?? 0, pct)} → plays {homeP2Phcp} (normalized)</p>}
             </div>
           )}
         </div>
@@ -483,18 +500,18 @@ export default async function ScorecardPage({
             <div className="text-navy/60 space-y-0.5">
               {matchup.away_p1 && (
                 <p>
-                  {matchup.away_p1.display_name}: course hcp {ap1CH}
+                  {matchup.away_p1.display_name}:{" "}
                   {fmt.name === "Scramble"
-                    ? ` × ${ap1CH <= (ap2CH ?? 999) ? pct : pct2}% (${ap1CH <= (ap2CH ?? 999) ? "low" : "high"}) = ${playingHandicap(ap1CH, ap1CH <= (ap2CH ?? 999) ? pct : pct2, nineHole)}`
-                    : ` × ${pct}% = ${playingHandicap(ap1CH, pct, nineHole)}`}
+                    ? hcpChain(ap1CH, ap1CH <= (ap2CH ?? 999) ? pct : pct2, ap1CH <= (ap2CH ?? 999) ? "low" : "high")
+                    : hcpChain(ap1CH, pct)}
                 </p>
               )}
               {matchup.away_p2 && ap2CH !== null && (
                 <p>
-                  {matchup.away_p2.display_name}: course hcp {ap2CH}
+                  {matchup.away_p2.display_name}:{" "}
                   {fmt.name === "Scramble"
-                    ? ` × ${ap2CH < ap1CH ? pct : pct2}% (${ap2CH < ap1CH ? "low" : "high"}) = ${playingHandicap(ap2CH, ap2CH < ap1CH ? pct : pct2, nineHole)}`
-                    : ` × ${pct}% = ${playingHandicap(ap2CH, pct, nineHole)}`}
+                    ? hcpChain(ap2CH, ap2CH < ap1CH ? pct : pct2, ap2CH < ap1CH ? "low" : "high")
+                    : hcpChain(ap2CH, pct)}
                 </p>
               )}
               <p className="font-semibold text-navy pt-0.5">
@@ -503,12 +520,12 @@ export default async function ScorecardPage({
             </div>
           ) : fmt.name === "Singles" ? (
             <p className="text-navy/60">
-              {matchup.away_p1?.display_name}: course hcp {ap1CH} × {pct}% = playing hcp {awayP1Phcp}
+              {matchup.away_p1?.display_name}: {hcpChain(ap1CH, pct)} → plays {awayP1Phcp} (normalized)
             </p>
           ) : (
             <div className="text-navy/60 space-y-0.5">
-              {matchup.away_p1 && <p>{matchup.away_p1.display_name}: course hcp {ap1CH} × {pct}% → playing hcp {awayP1Phcp}</p>}
-              {matchup.away_p2 && awayP2Phcp != null && <p>{matchup.away_p2.display_name}: course hcp {ap2CH ?? 0} × {pct}% → playing hcp {awayP2Phcp}</p>}
+              {matchup.away_p1 && <p>{matchup.away_p1.display_name}: {hcpChain(ap1CH, pct)} → plays {awayP1Phcp} (normalized)</p>}
+              {matchup.away_p2 && awayP2Phcp != null && <p>{matchup.away_p2.display_name}: {hcpChain(ap2CH ?? 0, pct)} → plays {awayP2Phcp} (normalized)</p>}
             </div>
           )}
         </div>
