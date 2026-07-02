@@ -13,6 +13,7 @@ import {
 } from "@/lib/matchcalc";
 import { matchOutcome, outcomeBadge } from "@/lib/matchplay";
 import { ScoreInput } from "@/components/ScoreInput";
+import { assertCanScore, upsertHoleScores } from "@/lib/scoring";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,59 +29,6 @@ function holeNums(side: string): number[] {
   return Array.from({ length: 18 }, (_, i) => i + 1);
 }
 
-/** Upsert the grid of gross scores from the scorecard form. */
-async function upsertHoleScores(
-  supabase: ReturnType<typeof createClient>,
-  matchupId: string,
-  formData: FormData,
-) {
-  const nums = (formData.get("hole_numbers") as string).split(",").map(Number);
-  for (const n of nums) {
-    const parse = (key: string) => {
-      const v = formData.get(key) as string;
-      return v !== "" ? parseInt(v) : null;
-    };
-    await supabase.from("hole_scores").upsert({
-      matchup_id:    matchupId,
-      hole_number:   n,
-      home_p1_gross: parse(`hp1_${n}`),
-      home_p2_gross: parse(`hp2_${n}`),
-      away_p1_gross: parse(`ap1_${n}`),
-      away_p2_gross: parse(`ap2_${n}`),
-    }, { onConflict: "matchup_id,hole_number", ignoreDuplicates: false });
-  }
-}
-
-/**
- * Server-side authorization for scoring actions: admins/assistants, or any
- * player who is IN the match (the architecture's scoring exception).
- * Mirrors the RLS policy; throws if not allowed.
- */
-async function assertCanScore(matchupId: string) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: player } = await supabase
-    .from("players").select("id, role").eq("auth_user_id", user.id).single();
-  if (!player) redirect("/login");
-  if (player.role === "admin" || player.role === "assistant") return;
-
-  const { data: m } = await supabase
-    .from("matchups")
-    .select("home_p1_id, home_p2_id, away_p1_id, away_p2_id")
-    .eq("id", matchupId)
-    .single();
-  const epIds = [m?.home_p1_id, m?.home_p2_id, m?.away_p1_id, m?.away_p2_id].filter(Boolean) as string[];
-  if (epIds.length === 0) throw new Error("Not authorized to score this match");
-
-  const { data: eps } = await supabase
-    .from("event_participants").select("player_id").in("id", epIds);
-  if (!eps?.some((ep) => ep.player_id === player.id)) {
-    throw new Error("Not authorized to score this match");
-  }
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export async function MatchScorecard({
@@ -90,13 +38,19 @@ export async function MatchScorecard({
   backLabel,
   viewer,
   reviewing: reviewRequested,
+  defaultHcpOpen = true,
+  reviewHref,
+  cardHref,
 }: {
   matchupId: string;
-  currentPath: string;
+  currentPath: string;   // clean path (no query) — used for revalidation
   backHref: string;
   backLabel: string;
   viewer: Player;
   reviewing: boolean;
+  defaultHcpOpen?: boolean;
+  reviewHref?: string;   // where "Save & Review" lands (default: currentPath?review=1)
+  cardHref?: string;     // where "Back to scorecard" from review lands (default: currentPath)
 }) {
   const supabase = createClient();
 
@@ -248,7 +202,7 @@ export async function MatchScorecard({
     await upsertHoleScores(createClient(), matchupId, formData);
     revalidatePath(currentPath);
     revalidatePath("/live");
-    redirect(`${currentPath}?review=1`);
+    redirect(reviewHref ?? `${currentPath}?review=1`);
   }
 
   // Confirm from the review screen: write the derived status/result/score.
@@ -346,7 +300,7 @@ export async function MatchScorecard({
               Confirm &amp; Complete Match
             </button>
           </form>
-          <Link href={currentPath} className="block text-center text-sm text-navy/50 hover:text-navy">
+          <Link href={cardHref ?? currentPath} className="block text-center text-sm text-navy/50 hover:text-navy">
             ← Back to scorecard
           </Link>
         </div>
@@ -371,8 +325,18 @@ export async function MatchScorecard({
         </p>
       )}
 
-      {/* Handicap breakdown */}
-      <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline text-xs">
+      {/* Handicap breakdown — collapsible so the card gets the screen space */}
+      <details open={defaultHcpOpen} className="group rounded-xl border border-hairline bg-white text-xs">
+        <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+          <span className="font-semibold text-navy">
+            Handicaps &amp; strokes
+            {homeTeamPhcp != null && awayTeamPhcp != null && (
+              <span className="font-normal text-navy/50"> — {homeLabel} {homeTeamPhcp} · {awayLabel} {awayTeamPhcp}</span>
+            )}
+          </span>
+          <span className="text-navy/40 transition-transform group-open:rotate-90">›</span>
+        </summary>
+        <div className="divide-y divide-hairline border-t border-hairline">
         {/* Home team */}
         <div className="px-4 py-3 space-y-1">
           <p className="font-semibold text-navy flex items-center gap-1.5">
@@ -469,7 +433,8 @@ export async function MatchScorecard({
           <span>●● = 2 strokes</span>
           <span className="text-amber-500">½ = half stroke</span>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Scorecard form */}
       <form>
