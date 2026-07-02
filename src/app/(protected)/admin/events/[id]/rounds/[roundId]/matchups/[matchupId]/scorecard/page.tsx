@@ -320,8 +320,12 @@ export default async function ScorecardPage({
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const resultIcon: Record<HoleResult & string, string> = {
-    home: "H", away: "A", halve: "½",
+  // Res column: team abbreviation + color dot instead of generic H/A
+  const abbrev = (name: string) => name.slice(0, 3).toUpperCase();
+  const resultCell: Record<"home" | "away" | "halve", { label: string; color: string | null }> = {
+    home:  { label: abbrev(homeLabel), color: homeTeam?.color ?? null },
+    away:  { label: abbrev(awayLabel), color: awayTeam?.color ?? null },
+    halve: { label: "½", color: null },
   };
 
   const inputCls = "w-10 rounded border border-hairline px-1 py-1 text-center text-sm text-navy focus:border-navy focus:outline-none";
@@ -572,7 +576,7 @@ export default async function ScorecardPage({
                     )}
                   </>
                 )}
-                <th className="text-center pl-2 py-2 text-xs font-semibold text-navy/50 w-8">Res</th>
+                <th className="text-center pl-2 py-2 text-xs font-semibold text-navy/50 w-12">Res</th>
               </tr>
             </thead>
             <tbody>
@@ -722,15 +726,18 @@ export default async function ScorecardPage({
                     )}
 
                     {/* Hole result */}
-                    <td className="pl-2 py-2 text-center font-semibold text-sm">
+                    <td className="pl-2 py-2 text-center font-semibold text-xs">
                       {result ? (
-                        <span className={
-                          result === "home" ? "text-blue-600"
-                          : result === "away" ? "text-red-600"
-                          : "text-navy/40"
-                        }>
-                          {resultIcon[result]}
-                        </span>
+                        result === "halve" ? (
+                          <span className="text-navy/40 text-sm">½</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1"
+                            style={{ color: resultCell[result].color ?? "#0C2D55" }}>
+                            <span className="inline-block w-2 h-2 rounded-full"
+                              style={{ backgroundColor: resultCell[result].color ?? "#0C2D55" }} />
+                            {resultCell[result].label}
+                          </span>
+                        )
                       ) : (
                         <span className="text-navy/20">—</span>
                       )}
