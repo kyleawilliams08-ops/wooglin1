@@ -28,7 +28,11 @@ export async function requirePlayer(): Promise<Player> {
     .eq("auth_user_id", user.id)
     .single();
 
-  if (!player) redirect("/login");
+  // Authenticated but no linked player row: send to login WITH an error flag.
+  // A bare /login would bounce straight back here (middleware sees the
+  // session) and loop forever — the flag both breaks the loop and surfaces
+  // the actual problem.
+  if (!player) redirect("/login?error=unlinked");
   return player as Player;
 }
 

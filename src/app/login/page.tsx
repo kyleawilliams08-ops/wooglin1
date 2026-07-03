@@ -31,6 +31,8 @@ function LoginForm() {
       });
     } else if (searchParams.get("error") === "auth") {
       setError("That sign-in link didn't work — it may be expired, already used, or opened in a different browser than the one that requested it. Send a fresh link below.");
+    } else if (searchParams.get("error") === "unlinked") {
+      setError("You're signed in, but this email isn't linked to a player profile yet. Tell the commissioner which email you used.");
     }
   }, [searchParams]);
 

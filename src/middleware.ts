@@ -38,7 +38,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === "/login") {
+  // Signed-in users skip the login page — unless they were sent there with an
+  // error (e.g. authenticated but no linked player row). Bouncing those would
+  // create an infinite / ↔ /login redirect loop.
+  if (user && pathname === "/login" && !request.nextUrl.searchParams.has("error")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
