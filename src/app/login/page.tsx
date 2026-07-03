@@ -84,7 +84,7 @@ function LoginForm() {
             <div>
               <p className="font-semibold text-navy">Check your email</p>
               <p className="mt-1 text-sm text-navy/70">
-                We sent a sign-in link and a 6-digit code to <strong>{email}</strong>
+                We sent a sign-in link and a code to <strong>{email}</strong>
               </p>
             </div>
             <form onSubmit={handleVerifyCode} className="space-y-2">
@@ -93,12 +93,12 @@ function LoginForm() {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={10}
                 required
-                placeholder="6-digit code"
+                placeholder="Sign-in code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                className="w-full rounded-lg border border-hairline bg-off-white px-4 py-3 text-center text-lg tracking-[0.4em] text-navy placeholder:text-sm placeholder:tracking-normal placeholder:text-navy/40 focus:outline-none focus:ring-2 focus:ring-navy"
+                className="w-full rounded-lg border border-hairline bg-off-white px-4 py-3 text-center text-lg tracking-[0.3em] text-navy placeholder:text-sm placeholder:tracking-normal placeholder:text-navy/40 focus:outline-none focus:ring-2 focus:ring-navy"
               />
               {error && <p className="text-sm text-usa-red">{error}</p>}
               <button
