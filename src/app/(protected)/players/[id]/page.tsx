@@ -223,19 +223,27 @@ export default async function PlayerProfilePage({
             </p>
             <ul className="space-y-2">
               {ls.sort((a, b) => a.roundNumber - b.roundNumber).map((l) => (
-                <li key={l.id} className="rounded-xl border border-hairline bg-white px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-navy truncate">
-                      {l.partner && <span className="text-navy/60">w/ {l.partner} </span>}
-                      <span className="text-navy/40">vs</span> {l.opponents}
-                    </p>
-                    <p className="text-xs text-navy/40 mt-0.5">R{l.roundNumber} · {l.format}</p>
-                  </div>
-                  <p className={`text-sm font-semibold shrink-0 ${l.outcome ? outcomeStyle[l.outcome] : "text-navy/30"}`}>
-                    {l.outcome
-                      ? `${outcomeWord[l.outcome]}${l.score && l.outcome !== "T" ? ` ${l.score}` : ""}`
-                      : "In progress"}
-                  </p>
+                <li key={l.id}>
+                  <Link
+                    href={`/live/match/${l.id}?view=card`}
+                    className="rounded-xl border border-hairline bg-white px-4 py-3 flex items-center justify-between gap-3 hover:bg-parchment transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm text-navy truncate">
+                        {l.partner && <span className="text-navy/60">w/ {l.partner} </span>}
+                        <span className="text-navy/40">vs</span> {l.opponents}
+                      </p>
+                      <p className="text-xs text-navy/40 mt-0.5">R{l.roundNumber} · {l.format}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className={`text-sm font-semibold ${l.outcome ? outcomeStyle[l.outcome] : "text-navy/30"}`}>
+                        {l.outcome
+                          ? `${outcomeWord[l.outcome]}${l.score && l.outcome !== "T" ? ` ${l.score}` : ""}`
+                          : "In progress"}
+                      </p>
+                      <span className="text-navy/30">›</span>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>
