@@ -925,3 +925,23 @@ update event_results set losing_roster = 'Joey, Ryan, Leamer, AJ, Brendan, Allen
 update event_results set losing_roster = 'Ryan, Kaplan, Leamer, Ross, AJ, Dave, Connor, Hugh' where year = 2016;
 update event_results set losing_roster = 'Stribos, Kaplan, Leamer, Ross, Hugh, Charlie, Shoops, Cole' where year = 2015;
 update event_results set losing_roster = 'Moore, Kyle, JC, AJ, Lars, Jason' where year = 2014;
+
+-- ============================================================
+-- Player photos: public avatars bucket, admin-managed
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "avatars public read" on storage.objects;
+create policy "avatars public read" on storage.objects
+  for select using (bucket_id = 'avatars');
+
+drop policy if exists "admins manage avatars" on storage.objects;
+create policy "admins manage avatars" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'avatars' and exists (
+    select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
+  with check (bucket_id = 'avatars' and exists (
+    select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));

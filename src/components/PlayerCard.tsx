@@ -5,6 +5,7 @@ export interface PlayerCardProps {
   nickname: string | null;
   role: string;
   index: number | null;
+  avatarUrl?: string | null;
   appearances: { year: number; result: "W" | "L" | "T" }[];
   /** Full span of cup years for the timeline, e.g. 2014..2025 */
   allYears: number[];
@@ -20,6 +21,7 @@ export function PlayerCard({
   nickname,
   role,
   index,
+  avatarUrl,
   appearances,
   allYears,
   latestYear,
@@ -68,12 +70,22 @@ export function PlayerCard({
       <div className="relative px-5 pb-5 pt-4">
         {/* identity — avatar wears the current/most recent cup's team color */}
         <div className="flex items-center gap-4">
-          <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-2xl font-bold text-off-white ring-2 ring-gold"
-            style={{ backgroundColor: team?.color ?? "#0C2D55" }}
-          >
-            {initials}
-          </div>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-gold"
+              style={{ borderColor: team?.color ?? "#0C2D55", borderWidth: 2 }}
+            />
+          ) : (
+            <div
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-2xl font-bold text-off-white ring-2 ring-gold"
+              style={{ backgroundColor: team?.color ?? "#0C2D55" }}
+            >
+              {initials}
+            </div>
+          )}
           <div className="min-w-0">
             <p className="truncate font-display text-2xl font-bold leading-tight text-navy">
               {displayName}

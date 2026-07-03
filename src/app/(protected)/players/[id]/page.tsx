@@ -154,6 +154,7 @@ export default async function PlayerProfilePage({
         nickname={player.nickname}
         role={player.role}
         index={player.current_index}
+        avatarUrl={player.avatar_url}
         appearances={(appearances ?? []) as { year: number; result: "W" | "L" | "T" }[]}
         allYears={allYears}
         latestYear={latestYear}

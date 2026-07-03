@@ -39,9 +39,15 @@ export default async function PlayersPage() {
                 href={`/players/${p.id}`}
                 className="flex items-center gap-3 rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors"
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy font-display text-sm font-bold text-off-white ring-1 ring-gold/60">
-                  {initials(p)}
-                </span>
+                {p.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.avatar_url} alt={p.name}
+                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-gold/60" />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy font-display text-sm font-bold text-off-white ring-1 ring-gold/60">
+                    {initials(p)}
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-navy">
                     {p.nickname ?? p.name}

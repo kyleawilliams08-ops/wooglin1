@@ -123,7 +123,7 @@ export default async function Home() {
       {/* Quick links */}
       <div className="grid grid-cols-2 gap-3">
         <Link href="/players" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors">
-          <p className="font-semibold text-navy text-sm">Players</p>
+          <p className="font-semibold text-navy text-sm">Player Cards</p>
           <p className="text-xs text-navy/50 mt-0.5">Profiles &amp; records</p>
         </Link>
         <Link href="/history" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors">
