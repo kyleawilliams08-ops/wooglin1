@@ -2,6 +2,7 @@ import { requirePlayer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PlayerCard } from "@/components/PlayerCard";
 
 type EPRef = { id: string; display_name: string } | null;
 
@@ -26,9 +27,13 @@ export default async function PlayerProfilePage({
     .select("year, result")
     .eq("player_id", params.id)
     .order("year", { ascending: false });
-  const cupWins   = appearances?.filter((a) => a.result === "W").length ?? 0;
-  const cupLosses = appearances?.filter((a) => a.result === "L").length ?? 0;
-  const cupTies   = appearances?.filter((a) => a.result === "T").length ?? 0;
+  // Timeline span + reigning-champ check come from the cup archive
+  const { data: cupYears } = await supabase
+    .from("event_results")
+    .select("year")
+    .order("year");
+  const allYears = (cupYears ?? []).map((r) => r.year);
+  const latestYear = allYears.length > 0 ? allYears[allYears.length - 1] : null;
 
   // Every event this player has been part of (team history)
   const { data: epsRaw } = await supabase
@@ -130,34 +135,16 @@ export default async function PlayerProfilePage({
     <div className="px-4 py-6 space-y-5">
       <Link href="/players" className="text-sm text-navy/50 hover:text-navy">← Players</Link>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold text-navy">
-          {player.name}
-          {player.nickname && player.nickname !== player.name && (
-            <span className="text-navy/40 font-normal text-lg"> · &ldquo;{player.nickname}&rdquo;</span>
-          )}
-        </h1>
-        <p className="text-sm text-navy/50 mt-0.5 uppercase tracking-wide">{player.role}</p>
-      </div>
-
-      {/* Index + career stats (appearances + cup record from the backfill) */}
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="rounded-xl border border-hairline bg-white px-2 py-3">
-          <p className="text-2xl font-bold text-navy tabular-nums">{player.current_index ?? "—"}</p>
-          <p className="text-xs text-navy/50 mt-0.5">Index</p>
-        </div>
-        <div className="rounded-xl border border-hairline bg-white px-2 py-3">
-          <p className="text-2xl font-bold text-navy tabular-nums">{appearances?.length ?? 0}</p>
-          <p className="text-xs text-navy/50 mt-0.5">Appearances</p>
-        </div>
-        <div className="rounded-xl border border-hairline bg-white px-2 py-3">
-          <p className="text-2xl font-bold text-navy tabular-nums">
-            {cupWins}–{cupLosses}{cupTies > 0 ? `–${cupTies}` : ""}
-          </p>
-          <p className="text-xs text-navy/50 mt-0.5">Cup Record</p>
-        </div>
-      </div>
+      {/* Player card */}
+      <PlayerCard
+        name={player.name}
+        nickname={player.nickname}
+        role={player.role}
+        index={player.current_index}
+        appearances={(appearances ?? []) as { year: number; result: "W" | "L" | "T" }[]}
+        allYears={allYears}
+        latestYear={latestYear}
+      />
 
       {/* Cup history: backfilled years, with team chip where the app knows it */}
       {(appearances?.length ?? 0) > 0 && (
