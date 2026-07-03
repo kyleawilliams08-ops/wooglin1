@@ -131,8 +131,8 @@ export default async function Home() {
           <p className="text-xs text-navy/50 mt-0.5">Past cups</p>
         </Link>
         {isAdmin(player) && (
-          <Link href="/admin" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors col-span-2">
-            <p className="font-semibold text-navy text-sm">Admin</p>
+          <Link href="/menu" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors col-span-2">
+            <p className="font-semibold text-navy text-sm">Commissioner Tools</p>
             <p className="text-xs text-navy/50 mt-0.5">Events, rosters, courses &amp; setup</p>
           </Link>
         )}

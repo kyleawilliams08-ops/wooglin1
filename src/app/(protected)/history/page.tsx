@@ -39,7 +39,7 @@ export default async function HistoryPage() {
       <ul className="space-y-2">
         {results?.map((r) => {
           const w = winnerStyle(r.winner);
-          const hasDetail = r.captains || r.roster || r.notes;
+          const hasDetail = r.captains || r.roster || r.losing_roster || r.notes;
           return (
             <li key={r.id} className="rounded-xl border border-hairline bg-white">
               <details className="group">
@@ -63,7 +63,8 @@ export default async function HistoryPage() {
                 {hasDetail && (
                   <div className="px-4 pb-3 pt-1 border-t border-hairline text-sm text-navy/70 space-y-1.5">
                     {r.captains && <p><span className="text-navy/40 text-xs uppercase tracking-wide">Captains</span><br />{r.captains}</p>}
-                    {r.roster && <p className="whitespace-pre-line"><span className="text-navy/40 text-xs uppercase tracking-wide">Roster</span><br />{r.roster}</p>}
+                    {r.roster && <p className="whitespace-pre-line"><span className="text-navy/40 text-xs uppercase tracking-wide">Champions 🏆</span><br />{r.roster}</p>}
+                    {r.losing_roster && <p className="whitespace-pre-line"><span className="text-navy/40 text-xs uppercase tracking-wide">Runners-up</span><br />{r.losing_roster}</p>}
                     {r.notes && <p className="whitespace-pre-line"><span className="text-navy/40 text-xs uppercase tracking-wide">Notes</span><br />{r.notes}</p>}
                   </div>
                 )}

@@ -1,4 +1,4 @@
-import { requirePlayer, isAdmin } from "@/lib/auth";
+import { requirePlayer } from "@/lib/auth";
 import { BottomNav } from "@/components/BottomNav";
 import Image from "next/image";
 import Link from "next/link";
@@ -22,7 +22,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <main className="flex-1 pb-20">
         {children}
       </main>
-      <BottomNav isAdmin={isAdmin(player)} />
+      <BottomNav />
     </div>
   );
 }

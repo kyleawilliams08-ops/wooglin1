@@ -906,3 +906,22 @@ create trigger sync_player_auth_link
 -- Re-fire once for existing rows so every player links to whatever auth
 -- account currently matches their email (and nothing else).
 update players set email = email;
+
+-- ============================================================
+-- History: losing rosters (derived from the appearance sheet's L column)
+-- ============================================================
+
+alter table event_results add column if not exists losing_roster text;
+
+update event_results set losing_roster = 'Kyle, Boynton, Dave, Brendan, SammyT, Shoops, Holt, Zach' where year = 2025;
+update event_results set losing_roster = 'Kyle, Joey, Stribos, Ross, Lars, Dave, Brendan' where year = 2024;
+update event_results set losing_roster = 'Moore, Leamer, Lars, Dave, JoeG, Derm Dave' where year = 2023;
+update event_results set losing_roster = 'Moore, Stribos, Kaplan, Ross, Dave, Jason, Brendan, Greg Stribos' where year = 2022;
+update event_results set losing_roster = 'Kyle, Stribos, Ryan, Leamer, Ross, Dave, Jason, Charlie' where year = 2021;
+update event_results set losing_roster = 'Moore, Kyle, JC, Lars, JoeG' where year = 2020;
+update event_results set losing_roster = 'Moore, Kyle, JC, Ryan, Kaplan, Ross, Jason, Hugh, Cole' where year = 2019;
+update event_results set losing_roster = 'Kyle, Ross, Dave, Jason, JoeG, Will G' where year = 2018;
+update event_results set losing_roster = 'Joey, Ryan, Leamer, AJ, Brendan, Allen' where year = 2017;
+update event_results set losing_roster = 'Ryan, Kaplan, Leamer, Ross, AJ, Dave, Connor, Hugh' where year = 2016;
+update event_results set losing_roster = 'Stribos, Kaplan, Leamer, Ross, Hugh, Charlie, Shoops, Cole' where year = 2015;
+update event_results set losing_roster = 'Moore, Kyle, JC, AJ, Lars, Jason' where year = 2014;

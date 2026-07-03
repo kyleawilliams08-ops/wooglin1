@@ -24,10 +24,9 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M7 6H4.5a0 0 0 0 0 0 0c0 2.5 1 4 2.5 4.5M17 6h2.5c0 2.5-1 4-2.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
-  Admin: (
+  Menu: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M19 12a7 7 0 0 0-.14-1.4l2-1.55-2-3.46-2.36.95a7 7 0 0 0-2.42-1.4L13.7 2.6h-3.4l-.38 2.54a7 7 0 0 0-2.42 1.4l-2.36-.95-2 3.46 2 1.55A7 7 0 0 0 5 12c0 .48.05.94.14 1.4l-2 1.55 2 3.46 2.36-.95a7 7 0 0 0 2.42 1.4l.38 2.54h3.4l.38-2.54a7 7 0 0 0 2.42-1.4l2.36.95 2-3.46-2-1.55c.09-.46.14-.92.14-1.4Z" strokeLinejoin="round" />
+      <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
     </svg>
   ),
 };
@@ -36,14 +35,13 @@ const tabs = [
   { href: "/",        label: "Home"    },
   { href: "/live",    label: "Live"    },
   { href: "/history", label: "History" },
+  { href: "/menu",    label: "Menu"    },
 ];
 
-export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
+export function BottomNav() {
   const pathname = usePathname();
 
-  const allTabs = isAdmin
-    ? [...tabs, { href: "/admin", label: "Admin" }]
-    : tabs;
+  const allTabs = tabs;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-hairline bg-off-white flex pb-[env(safe-area-inset-bottom)]">
