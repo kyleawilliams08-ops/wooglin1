@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -11,7 +11,6 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0); // seconds until resend allowed
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -25,7 +24,9 @@ function LoginForm() {
     if (code) {
       const supabase = createClient();
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (!error) router.replace("/");
+        // Hard navigation so the fresh auth cookies reach the middleware —
+        // client-side routing can reuse the cached pre-login redirect.
+        if (!error) window.location.href = "/";
         else setError("That sign-in link didn't work — it may be expired, already used, or opened in a different browser than the one that requested it. Send a fresh link below.");
       });
     } else if (searchParams.get("error") === "auth") {
@@ -73,7 +74,9 @@ function LoginForm() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.replace("/");
+      // Hard navigation (not router.replace) so the new session cookies are
+      // sent with the request instead of hitting the cached login redirect.
+      window.location.href = "/";
     }
   }
 
