@@ -32,7 +32,7 @@ function LoginForm() {
     } else if (searchParams.get("error") === "auth") {
       setError("That sign-in link didn't work — it may be expired, already used, or opened in a different browser than the one that requested it. Send a fresh link below.");
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
   async function sendCode() {
     setLoading(true);
