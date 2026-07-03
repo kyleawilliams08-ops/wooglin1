@@ -43,6 +43,16 @@ export default async function MatchupsPage() {
   const homeTeam = teams?.[0];
   const awayTeam = teams?.[1];
 
+  // Captains of this event can edit their team's lineups
+  const { data: captainEp } = await supabase
+    .from("event_participants")
+    .select("team_id")
+    .eq("event_id", event.id)
+    .eq("player_id", player.id)
+    .eq("is_captain", true)
+    .maybeSingle();
+  const canEditLineups = admin || captainEp != null;
+
   const { data: roundsRaw } = await supabase
     .from("rounds")
     .select("id, round_number, name, side, played_at, formats(name), course_tees(tee_name, courses(name))")
@@ -116,10 +126,10 @@ export default async function MatchupsPage() {
             ) : (
               <ul className="space-y-2">
                 {ms.map((m) => (
-                  <li key={m.id}>
+                  <li key={m.id} className="flex items-stretch gap-2">
                     <Link
                       href={`/live/match/${m.id}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-navy truncate">
@@ -136,6 +146,14 @@ export default async function MatchupsPage() {
                         {m.status === "complete" && m.match_score ? m.match_score : "›"}
                       </span>
                     </Link>
+                    {canEditLineups && (
+                      <Link
+                        href={`/admin/events/${event.id}/rounds/${round.id}/matchups/${m.id}`}
+                        className="flex shrink-0 items-center rounded-xl border border-hairline bg-parchment px-3 text-xs font-semibold text-navy/60 hover:text-navy"
+                      >
+                        Edit
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

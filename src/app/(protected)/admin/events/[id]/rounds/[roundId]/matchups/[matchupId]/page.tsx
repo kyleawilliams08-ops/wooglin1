@@ -10,9 +10,18 @@ export default async function EditMatchupPage({
   params: { id: string; roundId: string; matchupId: string };
 }) {
   const player = await requirePlayer();
-  if (!isAdmin(player)) redirect("/");
-
   const supabase = createClient();
+
+  // Admins edit everything; captains edit their own team's lineup only.
+  const admin = isAdmin(player);
+  const { data: captainEp } = await supabase
+    .from("event_participants")
+    .select("team_id")
+    .eq("event_id", params.id)
+    .eq("player_id", player.id)
+    .eq("is_captain", true)
+    .maybeSingle();
+  if (!admin && !captainEp) redirect("/");
 
   const { data: roundRaw } = await supabase
     .from("rounds")
@@ -57,6 +66,10 @@ export default async function EditMatchupPage({
   const homeTeam = teams?.[0] ?? null;
   const awayTeam = teams?.[1] ?? null;
 
+  const canHome = admin || (captainEp != null && captainEp.team_id === homeTeam?.id);
+  const canAway = admin || (captainEp != null && captainEp.team_id === awayTeam?.id);
+  const canMeta = admin; // tee time, status, result, match score
+
   const { data: participantsRaw } = await supabase
     .from("event_participants")
     .select("id, display_name, team_id")
@@ -88,26 +101,40 @@ export default async function EditMatchupPage({
   async function saveMatchup(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const teeTime = formData.get("tee_time") as string;
-    await supabase.from("matchups").update({
-      home_p1_id:  formData.get("home_p1") as string || null,
-      home_p2_id:  isSingles ? null : (formData.get("home_p2") as string || null),
-      away_p1_id:  formData.get("away_p1") as string || null,
-      away_p2_id:  isSingles ? null : (formData.get("away_p2") as string || null),
-      tee_time:    teeTime || null,
-      status:      formData.get("status") as string,
-      result:      formData.get("result") as string || null,
-      match_score: formData.get("match_score") as string || null,
-    }).eq("id", params.matchupId);
+    // Partial update scoped to what this viewer may edit (captains: own side
+    // only). Disabled selects don't submit, so untouchable fields stay put.
+    const update: Record<string, string | null> = {};
+    if (canHome) {
+      update.home_p1_id = (formData.get("home_p1") as string) || null;
+      update.home_p2_id = isSingles ? null : ((formData.get("home_p2") as string) || null);
+    }
+    if (canAway) {
+      update.away_p1_id = (formData.get("away_p1") as string) || null;
+      update.away_p2_id = isSingles ? null : ((formData.get("away_p2") as string) || null);
+    }
+    if (canMeta) {
+      update.tee_time    = (formData.get("tee_time") as string) || null;
+      update.status      = formData.get("status") as string;
+      update.result      = (formData.get("result") as string) || null;
+      update.match_score = (formData.get("match_score") as string) || null;
+    }
+    await supabase.from("matchups").update(update).eq("id", params.matchupId);
     revalidatePath(matchupsPath);
-    redirect(matchupsPath);
+    revalidatePath("/matchups");
+    redirect(admin ? matchupsPath : "/matchups");
   }
 
   return (
     <div className="px-4 py-6 space-y-6">
-      <Link href={matchupsPath} className="text-sm text-navy/50 hover:text-navy">
+      <Link href={admin ? matchupsPath : "/matchups"} className="text-sm text-navy/50 hover:text-navy">
         ← Matchups
       </Link>
+
+      {!admin && (
+        <p className="rounded-lg bg-parchment px-3 py-2 text-xs text-navy/60">
+          Captain mode — you can set your own team&rsquo;s lineup. Tee times and results are set by the commissioner.
+        </p>
+      )}
 
       <h1 className="text-2xl font-display font-bold text-navy">
         Edit Match {matchup.match_number}
@@ -121,8 +148,9 @@ export default async function EditMatchupPage({
           <input
             name="tee_time"
             type="time"
+            disabled={!canMeta}
             defaultValue={matchup.tee_time ?? ""}
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy"
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy disabled:bg-parchment disabled:text-navy/50"
           />
         </div>
 
@@ -133,8 +161,8 @@ export default async function EditMatchupPage({
               style={{ backgroundColor: homeTeam?.color ?? "#ccc" }} />
             {homeTeam?.name ?? "Home"}
           </p>
-          <select name="home_p1" required
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white"
+          <select name="home_p1" required={canHome} disabled={!canHome}
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
             defaultValue={matchup.home_p1?.id ?? ""}>
             <option value="">Select player…</option>
             {homePlayers.map((p) => (
@@ -142,8 +170,8 @@ export default async function EditMatchupPage({
             ))}
           </select>
           {!isSingles && (
-            <select name="home_p2"
-              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white"
+            <select name="home_p2" disabled={!canHome}
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
               defaultValue={matchup.home_p2?.id ?? ""}>
               <option value="">Partner (optional for 2v1)</option>
               {homePlayers.map((p) => (
@@ -160,8 +188,8 @@ export default async function EditMatchupPage({
               style={{ backgroundColor: awayTeam?.color ?? "#ccc" }} />
             {awayTeam?.name ?? "Away"}
           </p>
-          <select name="away_p1" required
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white"
+          <select name="away_p1" required={canAway} disabled={!canAway}
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
             defaultValue={matchup.away_p1?.id ?? ""}>
             <option value="">Select player…</option>
             {awayPlayers.map((p) => (
@@ -169,8 +197,8 @@ export default async function EditMatchupPage({
             ))}
           </select>
           {!isSingles && (
-            <select name="away_p2"
-              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white"
+            <select name="away_p2" disabled={!canAway}
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
               defaultValue={matchup.away_p2?.id ?? ""}>
               <option value="">Partner (optional for 2v1)</option>
               {awayPlayers.map((p) => (
@@ -184,8 +212,8 @@ export default async function EditMatchupPage({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-sm font-medium text-navy">Status</label>
-            <select name="status" defaultValue={matchup.status}
-              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+            <select name="status" defaultValue={matchup.status} disabled={!canMeta}
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50">
               <option value="pending">Pending</option>
               <option value="active">Active</option>
               <option value="complete">Complete</option>
@@ -193,8 +221,8 @@ export default async function EditMatchupPage({
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium text-navy">Result</label>
-            <select name="result" defaultValue={matchup.result ?? ""}
-              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+            <select name="result" defaultValue={matchup.result ?? ""} disabled={!canMeta}
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50">
               <option value="">—</option>
               <option value="home">{homeTeam?.name ?? "Home"} wins</option>
               <option value="away">{awayTeam?.name ?? "Away"} wins</option>
@@ -209,9 +237,10 @@ export default async function EditMatchupPage({
           <input
             name="match_score"
             type="text"
+            disabled={!canMeta}
             defaultValue={matchup.match_score ?? ""}
             placeholder="e.g. 4&3, 2&1, 1 up, All Square"
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy"
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy disabled:bg-parchment disabled:text-navy/50"
           />
         </div>
 

@@ -945,3 +945,25 @@ create policy "admins manage avatars" on storage.objects
     select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')))
   with check (bucket_id = 'avatars' and exists (
     select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
+
+-- ============================================================
+-- Captains can edit matchups in events they captain.
+-- (Side-level restriction — only their team's slots — is enforced by the
+-- app's server actions; this row-level policy scopes them to their event.)
+-- ============================================================
+
+drop policy if exists "captains can update event matchups" on matchups;
+create policy "captains can update event matchups" on matchups
+  for update to authenticated
+  using (exists (
+    select 1 from rounds r
+    join event_participants ep on ep.event_id = r.event_id and ep.is_captain
+    join players p on p.id = ep.player_id
+    where r.id = matchups.round_id and p.auth_user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from rounds r
+    join event_participants ep on ep.event_id = r.event_id and ep.is_captain
+    join players p on p.id = ep.player_id
+    where r.id = matchups.round_id and p.auth_user_id = auth.uid()
+  ));
