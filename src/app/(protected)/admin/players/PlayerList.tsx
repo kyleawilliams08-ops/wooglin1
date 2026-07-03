@@ -99,6 +99,12 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                     className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
                   />
                   <input
+                    name="nickname"
+                    defaultValue={p.nickname ?? ""}
+                    placeholder="Nickname (shows on player card)"
+                    className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
+                  />
+                  <input
                     name="email"
                     type="email"
                     required

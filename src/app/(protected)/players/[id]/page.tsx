@@ -62,6 +62,15 @@ export default async function PlayerProfilePage({
     }
   }
 
+  // Year → this player's participant row in that year's REAL event (linked
+  // via event_results.event_id), for team chips on the Cups list.
+  const linkedEpByYear = new Map<number, (typeof eps)[number]>();
+  for (const r of cupResults ?? []) {
+    if (!r.event_id) continue;
+    const ep = eps.find((e) => e.event_id === r.event_id);
+    if (ep) linkedEpByYear.set(r.year, ep);
+  }
+
   // All matchups this player appears in
   const idList = epIds.join(",");
   const { data: matchupsRaw } = epIds.length > 0
@@ -167,7 +176,7 @@ export default async function PlayerProfilePage({
           <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-2">Cups</p>
           <ul className="space-y-2">
             {appearances!.map((a) => {
-              const ep = eps.find((e) => e.events?.year === a.year);
+              const ep = linkedEpByYear.get(a.year);
               return (
                 <li key={a.year} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
                   <p className="text-sm font-semibold text-navy tabular-nums">

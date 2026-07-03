@@ -48,26 +48,25 @@ export function PlayerCard({
     role === "captain" ? "Captain" : null;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border-2 border-navy bg-parchment shadow-lg">
-      {/* gold inner frame */}
-      <div className="pointer-events-none absolute inset-1.5 z-10 rounded-xl border border-gold/50" />
+    // Navy mat around a gold pinstripe — trading-card frame
+    <div className="rounded-2xl bg-navy p-1.5 shadow-lg">
+      <div className="relative overflow-hidden rounded-xl border border-gold/60 bg-parchment">
+        {/* crest watermark */}
+        <Image
+          src="/crest.png"
+          alt=""
+          width={200}
+          height={200}
+          className="absolute -bottom-8 -right-8 w-44 rotate-[-8deg] opacity-[0.07]"
+        />
 
-      {/* crest watermark */}
-      <Image
-        src="/crest.png"
-        alt=""
-        width={200}
-        height={200}
-        className="absolute -bottom-8 -right-8 w-44 rotate-[-8deg] opacity-[0.07]"
-      />
+        {/* header band */}
+        <div className="relative flex items-center justify-between bg-navy px-4 py-2">
+          <span className="text-[10px] font-semibold tracking-[0.25em] text-gold">WOOGLIN CUP</span>
+          <span className="text-[10px] tracking-widest text-off-white/50">EST. 2014</span>
+        </div>
 
-      {/* header band */}
-      <div className="relative flex items-center justify-between bg-navy px-4 py-2">
-        <span className="text-[10px] font-semibold tracking-[0.25em] text-gold">WOOGLIN CUP</span>
-        <span className="text-[10px] tracking-widest text-off-white/50">EST. 2014</span>
-      </div>
-
-      <div className="relative px-5 pb-5 pt-4">
+        <div className="relative px-5 pb-5 pt-4">
         {/* identity — avatar wears the current/most recent cup's team color */}
         <div className="flex items-center gap-4">
           {avatarUrl ? (
@@ -75,12 +74,11 @@ export function PlayerCard({
             <img
               src={avatarUrl}
               alt={displayName}
-              className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-gold"
-              style={{ borderColor: team?.color ?? "#0C2D55", borderWidth: 2 }}
+              className="h-24 w-24 shrink-0 rounded-full object-cover ring-2 ring-gold"
             />
           ) : (
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-2xl font-bold text-off-white ring-2 ring-gold"
+              className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full font-display text-3xl font-bold text-off-white ring-2 ring-gold"
               style={{ backgroundColor: team?.color ?? "#0C2D55" }}
             >
               {initials}
@@ -161,6 +159,7 @@ export function PlayerCard({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
