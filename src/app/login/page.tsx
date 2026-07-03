@@ -10,8 +10,15 @@ function LoginForm() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(0); // seconds until resend allowed
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -26,8 +33,7 @@ function LoginForm() {
     }
   }, [searchParams, router]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function sendCode() {
     setLoading(true);
     setError("");
     const supabase = createClient();
@@ -39,8 +45,15 @@ function LoginForm() {
       setError(error.message);
     } else {
       setSent(true);
+      setCode("");
+      setResendIn(60); // Supabase allows roughly one OTP per email per minute
     }
     setLoading(false);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await sendCode();
   }
 
   // Code entry works in ANY browser/PWA context — unlike the link, which
@@ -109,6 +122,14 @@ function LoginForm() {
                 {loading ? "Signing in…" : "Sign in with code"}
               </button>
             </form>
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={loading || resendIn > 0}
+              className="text-sm text-navy/60 underline underline-offset-2 disabled:no-underline disabled:text-navy/35"
+            >
+              {resendIn > 0 ? `Send a new code (${resendIn}s)` : "Send a new code"}
+            </button>
             <p className="text-xs text-navy/50">
               On your phone or in the installed app? Use the code — the link only works in the browser that requested it.
             </p>
