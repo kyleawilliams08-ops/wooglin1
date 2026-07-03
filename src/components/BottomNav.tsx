@@ -18,10 +18,11 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M4.5 21h5" strokeLinecap="round" />
     </svg>
   ),
-  History: (
+  Matchups: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-5 h-5">
-      <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7 6H4.5a0 0 0 0 0 0 0c0 2.5 1 4 2.5 4.5M17 6h2.5c0 2.5-1 4-2.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="3" />
+      <circle cx="16" cy="8" r="3" />
+      <path d="M2.5 20c.5-3.5 2.8-5.5 5.5-5.5S13 16.5 13.5 20M11.5 15.2c1.2-.5 2.7-.7 4.5-.7 2.7 0 5 2 5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   Menu: (
@@ -32,10 +33,10 @@ const icons: Record<string, React.ReactNode> = {
 };
 
 const tabs = [
-  { href: "/",        label: "Home"    },
-  { href: "/live",    label: "Live"    },
-  { href: "/history", label: "History" },
-  { href: "/menu",    label: "Menu"    },
+  { href: "/",         label: "Home"     },
+  { href: "/live",     label: "Live"     },
+  { href: "/matchups", label: "Matchups" },
+  { href: "/menu",     label: "Menu"     },
 ];
 
 export function BottomNav() {

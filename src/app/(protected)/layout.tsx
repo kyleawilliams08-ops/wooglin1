@@ -15,8 +15,17 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           </span>
           <span className="font-display font-bold tracking-wide text-lg">Wooglin Cup</span>
         </Link>
-        <span className="text-xs text-hairline">
+        <span className="flex items-center gap-2 text-xs text-hairline">
           {player.nickname ?? player.name} · {player.role}
+          {player.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={player.avatar_url} alt=""
+              className="h-7 w-7 rounded-full object-cover ring-1 ring-gold/60" />
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-off-white/15 text-[10px] font-bold text-off-white ring-1 ring-gold/60">
+              {(player.nickname ?? player.name).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+            </span>
+          )}
         </span>
       </header>
       <main className="flex-1 pb-20">
