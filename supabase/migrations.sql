@@ -880,3 +880,29 @@ on conflict (year) do update set
   location = excluded.location,
   captains = excluded.captains,
   event_id = excluded.event_id;
+
+-- ============================================================
+-- Players.email is the single source of truth for login linkage.
+-- Editing a player's email re-links (or un-links) their auth account;
+-- the existing auth.users triggers cover the other direction (account
+-- created after the row).
+-- ============================================================
+
+create or replace function public.sync_player_auth_link()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  select id into new.auth_user_id
+  from auth.users
+  where lower(email) = lower(new.email);
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_player_auth_link on players;
+create trigger sync_player_auth_link
+  before insert or update of email on players
+  for each row execute procedure public.sync_player_auth_link();
+
+-- Re-fire once for existing rows so every player links to whatever auth
+-- account currently matches their email (and nothing else).
+update players set email = email;
