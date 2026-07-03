@@ -10,6 +10,8 @@ export interface PlayerCardProps {
   allYears: number[];
   /** Latest completed cup year — used for the reigning-champ badge */
   latestYear: number | null;
+  /** Team from the current or most recent cup (teams reshuffle yearly) */
+  team?: { name: string; color: string; year: number; current: boolean } | null;
 }
 
 /** Trading-card style player profile header. */
@@ -21,6 +23,7 @@ export function PlayerCard({
   appearances,
   allYears,
   latestYear,
+  team,
 }: PlayerCardProps) {
   const displayName = nickname ?? name;
   const initials = displayName
@@ -63,9 +66,12 @@ export function PlayerCard({
       </div>
 
       <div className="relative px-5 pb-5 pt-4">
-        {/* identity */}
+        {/* identity — avatar wears the current/most recent cup's team color */}
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-navy font-display text-2xl font-bold text-off-white ring-2 ring-gold">
+          <div
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-2xl font-bold text-off-white ring-2 ring-gold"
+            style={{ backgroundColor: team?.color ?? "#0C2D55" }}
+          >
             {initials}
           </div>
           <div className="min-w-0">
@@ -76,6 +82,14 @@ export function PlayerCard({
               <p className="truncate text-xs text-navy/50">{name}</p>
             )}
             <div className="mt-1 flex flex-wrap gap-1.5">
+              {team && (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                  style={{ backgroundColor: team.color }}
+                >
+                  {team.name} {team.current ? "· Current" : `’${String(team.year).slice(2)}`}
+                </span>
+              )}
               {reigning && (
                 <span className="rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-navy">
                   🏆 Reigning Champ

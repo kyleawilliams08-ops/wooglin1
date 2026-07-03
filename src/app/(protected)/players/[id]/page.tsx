@@ -28,11 +28,11 @@ export default async function PlayerProfilePage({
     .eq("player_id", params.id)
     .order("year", { ascending: false });
   // Timeline span + reigning-champ check come from the cup archive
-  const { data: cupYears } = await supabase
+  const { data: cupResults } = await supabase
     .from("event_results")
-    .select("year")
+    .select("year, event_id")
     .order("year");
-  const allYears = (cupYears ?? []).map((r) => r.year);
+  const allYears = (cupResults ?? []).map((r) => r.year);
   const latestYear = allYears.length > 0 ? allYears[allYears.length - 1] : null;
 
   // Every event this player has been part of (team history)
@@ -48,6 +48,19 @@ export default async function PlayerProfilePage({
   const epIds = eps.map((e) => e.id);
   const epIdSet = new Set(epIds);
   const eventById = new Map(eps.map((e) => [e.event_id, e]));
+
+  // Most recent cup team: walk the archive newest-first, but only through
+  // events linked in event_results — the real cup lineage — so test events
+  // (which can share a year) never color the card.
+  let recentTeam: { name: string; color: string; year: number; current: boolean } | null = null;
+  for (const r of [...(cupResults ?? [])].reverse()) {
+    if (!r.event_id) continue;
+    const ep = eps.find((e) => e.event_id === r.event_id);
+    if (ep?.teams) {
+      recentTeam = { name: ep.teams.name, color: ep.teams.color, year: r.year, current: false };
+      break;
+    }
+  }
 
   // All matchups this player appears in
   const idList = epIds.join(",");
@@ -144,6 +157,7 @@ export default async function PlayerProfilePage({
         appearances={(appearances ?? []) as { year: number; result: "W" | "L" | "T" }[]}
         allYears={allYears}
         latestYear={latestYear}
+        team={recentTeam}
       />
 
       {/* Cup history: backfilled years, with team chip where the app knows it */}
