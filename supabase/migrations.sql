@@ -174,7 +174,11 @@ create trigger on_auth_user_updated
 -- ============================================================
 
 -- Players
-insert into players (name, nickname, email, current_index, role) values
+-- Guarded by NICKNAME (not email): admins edit emails to real addresses, so
+-- an email-keyed upsert would resurrect placeholder rows on every re-run.
+insert into players (name, nickname, email, current_index, role)
+select v.name, v.nickname, v.email, v.current_index::numeric, v.role::player_role
+from (values
   ('Kyle Williams',      'Kyle',    'kyle@fairwayfinancialpartners.com', 8.0,  'admin'),
   ('Ryan Hendrickson',   'Ryan',    'ryan@wooglin.local',                12.4, 'captain'),
   ('Joe Guenther',       'JoeG',    'joeg@wooglin.local',                16.1, 'player'),
@@ -191,11 +195,8 @@ insert into players (name, nickname, email, current_index, role) values
   ('Sam Taylor',         'SammyT',  'sammyt@wooglin.local',              14.7, 'player'),
   ('Zach Williams',      'Zach',    'zach@wooglin.local',                null, 'player'),
   ('Alex Moore',         'Moore',   'moore@wooglin.local',               null, 'player')
-on conflict (email) do update set
-  name          = excluded.name,
-  nickname      = excluded.nickname,
-  current_index = excluded.current_index,
-  role          = excluded.role;
+) as v(name, nickname, email, current_index, role)
+where not exists (select 1 from players p where p.nickname = v.nickname);
 
 -- 2025 Event
 -- Idempotent by name (year is no longer unique): update if the seed event exists, else insert.
@@ -227,23 +228,18 @@ begin
   insert into teams (event_id, name, color) values (v_event_id, 'USA',    '#BE2F27') returning id into v_usa_id;
   insert into teams (event_id, name, color) values (v_event_id, 'Europe', '#185D3B') returning id into v_eur_id;
 
+  -- Rosters keyed by nickname (emails get edited to real addresses)
   -- USA roster
   insert into event_participants (event_id, player_id, team_id, display_name, is_captain)
   select v_event_id, p.id, v_usa_id, p.nickname, (p.nickname = 'Ryan')
-  from players p where p.email in (
-    'ryan@wooglin.local','joeg@wooglin.local',
-    'joey@wooglin.local','lars@wooglin.local','ross@wooglin.local',
-    'allred@wooglin.local','stribos@wooglin.local'
-  );
+  from players p where p.nickname in
+    ('Ryan','JoeG','Joey','Lars','Ross','Allred','Stribos','Moore');
 
   -- Europe roster
   insert into event_participants (event_id, player_id, team_id, display_name, is_captain)
   select v_event_id, p.id, v_eur_id, p.nickname, (p.nickname = 'Brendan')
-  from players p where p.email in (
-    'brendan@wooglin.local','dave@wooglin.local','holt@wooglin.local',
-    'shoops@wooglin.local','kyle@fairwayfinancialpartners.com',
-    'boynton@wooglin.local','sammyt@wooglin.local','zach@wooglin.local'
-  );
+  from players p where p.nickname in
+    ('Brendan','Dave','Holt','Shoops','Kyle','Boynton','SammyT','Zach');
 end;
 $$;
 
@@ -649,7 +645,10 @@ create policy "admins can manage player_appearances"
   with check (exists (select 1 from players p where p.auth_user_id = auth.uid() and p.role in ('admin','assistant')));
 
 -- Players from the spreadsheet who aren't in the app yet (placeholder emails).
-insert into players (name, nickname, email, role) values
+-- Guarded by nickname so edited emails/names never resurrect duplicates.
+insert into players (name, nickname, email, role)
+select v.name, v.nickname, v.email, v.role::player_role
+from (values
   ('JC', 'JC', 'jc@wooglin.local', 'player'),
   ('Kaplan', 'Kaplan', 'kaplan@wooglin.local', 'player'),
   ('Leamer', 'Leamer', 'leamer@wooglin.local', 'player'),
@@ -665,7 +664,8 @@ insert into players (name, nickname, email, role) values
   ('Rob', 'Rob', 'rob@wooglin.local', 'player'),
   ('Will G', 'Will G', 'willg@wooglin.local', 'player'),
   ('Derm Dave', 'Derm Dave', 'dermdave@wooglin.local', 'player')
-on conflict (email) do nothing;
+) as v(name, nickname, email, role)
+where not exists (select 1 from players p where p.nickname = v.nickname);
 
 -- Year-by-year results keyed by nickname (idempotent).
 insert into player_appearances (player_id, year, result)
@@ -967,3 +967,41 @@ create policy "captains can update event matchups" on matchups
     join players p on p.id = ep.player_id
     where r.id = matchups.round_id and p.auth_user_id = auth.uid()
   ));
+
+-- ============================================================
+-- Cleanup: merge resurrected placeholder duplicates.
+-- Earlier seed runs re-created placeholder rows after emails were edited
+-- to real addresses. For every @wooglin.local row whose nickname also has
+-- a real-email row, move its links to the real row and delete it.
+-- Idempotent: no duplicates -> no-op.
+-- ============================================================
+
+do $$
+declare d record;
+begin
+  for d in
+    select ph.id as dupe_id, keep.id as keep_id
+    from players ph
+    join players keep
+      on keep.nickname = ph.nickname
+     and keep.id <> ph.id
+     and keep.email not like '%@wooglin.local'
+    where ph.email like '%@wooglin.local'
+  loop
+    -- Re-point event participation unless the keeper is already in that event
+    update event_participants ep
+    set player_id = d.keep_id
+    where ep.player_id = d.dupe_id
+      and not exists (
+        select 1 from event_participants e2
+        where e2.event_id = ep.event_id and e2.player_id = d.keep_id
+      );
+
+    -- Any leftovers would duplicate the keeper's participation — drop them
+    delete from event_participants where player_id = d.dupe_id;
+
+    -- Appearances/handicaps on the dupe are redundant copies; the FK
+    -- cascade removes them with the player row.
+    delete from players where id = d.dupe_id;
+  end loop;
+end $$;
