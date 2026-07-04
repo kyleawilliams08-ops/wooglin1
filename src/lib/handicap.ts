@@ -12,6 +12,34 @@ export interface Format {
 }
 
 /**
+ * PLUS HANDICAPS: a player better than scratch (e.g. "+2.0") is stored as a
+ * NEGATIVE number internally (-2.0) and displayed with a "+" prefix. The math
+ * below works unchanged: normalize-to-lowest gives the plus player 0 and
+ * widens everyone else's gap, which is exactly how plus handicaps play.
+ */
+
+/** Display a handicap/index: negatives render as plus handicaps ("+2"). */
+export function formatHcp(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n < 0 ? `+${Math.abs(n)}` : `${n}`;
+}
+
+/**
+ * Parse a typed index/handicap. Accepts "12.4", "-2", and golf notation
+ * "+2.0" (meaning better than scratch → stored negative).
+ */
+export function parseHcpInput(raw: string): number | null {
+  const s = raw.trim();
+  if (s === "") return null;
+  if (s.startsWith("+")) {
+    const v = parseFloat(s.slice(1));
+    return Number.isNaN(v) ? null : -Math.abs(v);
+  }
+  const v = parseFloat(s);
+  return Number.isNaN(v) ? null : v;
+}
+
+/**
  * Round to nearest 0.5. Ties (e.g. 4.25, 7.75) round up.
  * Applied as the final step after all format/9-hole adjustments.
  *   4.25 → 4.5   |   7.75 → 8.0   |   7.4 → 7.5   |   7.6 → 7.5

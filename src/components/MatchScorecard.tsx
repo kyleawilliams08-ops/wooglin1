@@ -226,7 +226,11 @@ export async function MatchScorecard({
 
   // Spell out every step of the playing-hcp math, mirroring playingHandicap():
   // course → (9-hole ÷2) → × format % → rounded to 0.5
-  const fmtNum = (n: number) => `${Math.round(n * 100) / 100}`;
+  // Negatives are plus handicaps and display with a "+" (e.g. +2).
+  const fmtNum = (n: number) => {
+    const r = Math.round(n * 100) / 100;
+    return r < 0 ? `+${Math.abs(r)}` : `${r}`;
+  };
   const hcpChain = (courseHcp: number, pctUsed: number, tag?: string) => {
     const base = nineHole ? courseHcp / 2 : courseHcp;
     const raw = base * (pctUsed / 100);

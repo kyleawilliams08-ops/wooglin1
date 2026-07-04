@@ -3,13 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PlayerCard } from "@/components/PlayerCard";
+import { YearFilter } from "@/components/YearFilter";
 
 type EPRef = { id: string; display_name: string } | null;
 
 export default async function PlayerProfilePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { year?: string };
 }) {
   await requirePlayer();
   const supabase = createClient();
@@ -213,8 +216,23 @@ export default async function PlayerProfilePage({
         </div>
       )}
 
+      {/* Year filter once there's more than one event of matches */}
+      {eventGroups.length > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">Matches</p>
+          <YearFilter
+            years={eventGroups
+              .map(([id]) => eventById.get(id)?.events?.year)
+              .filter((y): y is number => y != null)}
+          />
+        </div>
+      )}
+
       {/* Matches by event */}
-      {eventGroups.map(([eventId, ls]) => {
+      {(searchParams.year
+        ? eventGroups.filter(([id]) => eventById.get(id)?.events?.year === parseInt(searchParams.year!))
+        : eventGroups
+      ).map(([eventId, ls]) => {
         const ev = eventById.get(eventId)?.events;
         return (
           <div key={eventId}>

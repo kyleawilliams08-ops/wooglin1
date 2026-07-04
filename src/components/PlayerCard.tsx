@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { formatHcp } from "@/lib/handicap";
 
 export interface PlayerCardProps {
   name: string;
@@ -117,7 +118,7 @@ export function PlayerCard({
         {/* stat row */}
         <div className="mt-4 grid grid-cols-3 divide-x divide-hairline rounded-xl border border-hairline bg-white text-center">
           <div className="px-2 py-3">
-            <p className="text-2xl font-bold tabular-nums text-navy">{index ?? "—"}</p>
+            <p className="text-2xl font-bold tabular-nums text-navy">{formatHcp(index)}</p>
             <p className="mt-0.5 text-[10px] uppercase tracking-wide text-navy/50">Index</p>
           </div>
           <div className="px-2 py-3">

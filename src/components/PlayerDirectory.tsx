@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { formatHcp } from "@/lib/handicap";
 
 export interface DirectoryPlayer {
   id: string;
@@ -72,7 +73,7 @@ export function PlayerDirectory({ players }: { players: DirectoryPlayer[] }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <p className="text-sm text-navy tabular-nums">{p.current_index ?? "—"}</p>
+                  <p className="text-sm text-navy tabular-nums">{formatHcp(p.current_index)}</p>
                   <span className="text-navy/30">›</span>
                 </div>
               </Link>

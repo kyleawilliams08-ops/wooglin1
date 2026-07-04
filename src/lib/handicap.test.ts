@@ -24,6 +24,52 @@ const tobaccoRoadDisc: { rating: number; slope: number; par: number } = { rating
 // ---------------------------------------------------------------------------
 // roundToHalf
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Plus handicaps (stored negative, displayed with +)
+// ---------------------------------------------------------------------------
+import { formatHcp, parseHcpInput, normalizeToLowest as ntl } from "./handicap";
+
+describe("plus handicaps", () => {
+  it("parses golf notation: '+2.0' stores as -2", () => {
+    expect(parseHcpInput("+2.0")).toBe(-2);
+    expect(parseHcpInput("12.4")).toBe(12.4);
+    expect(parseHcpInput("-1.5")).toBe(-1.5);
+    expect(parseHcpInput("")).toBeNull();
+    expect(parseHcpInput("abc")).toBeNull();
+  });
+
+  it("formats negatives as plus handicaps", () => {
+    expect(formatHcp(-2)).toBe("+2");
+    expect(formatHcp(-1.5)).toBe("+1.5");
+    expect(formatHcp(8)).toBe("8");
+    expect(formatHcp(0)).toBe("0");
+    expect(formatHcp(null)).toBe("—");
+  });
+
+  it("course handicap goes negative for a plus player", () => {
+    // +2.0 index at Mid Pines Blue (72.9/138 par 72): -2 × 1.221 + 0.9 = -1.54 → -2
+    expect(courseHandicap(-2.0, { rating: 72.9, slope: 138, par: 72 })).toBe(-2);
+  });
+
+  it("normalize-to-lowest widens the gap off a plus player", () => {
+    // Plus player plays 0; the 11 gets the full 13-stroke difference
+    expect(ntl([-2, 11])).toEqual([0, 13]);
+  });
+
+  it("singles: plus player gives strokes, receives none", () => {
+    const tee = { rating: 72.9, slope: 138, par: 72 };
+    const { hcpA, hcpB } = singlesHandicaps(-2.0, 8.0, tee, { hcp_allowance: 100 });
+    // A: CH -2, B: CH 11 → normalized 0 and 13
+    expect(hcpA).toBe(0);
+    expect(hcpB).toBe(13);
+  });
+
+  it("9-hole playing handicap halves negatives correctly", () => {
+    // CH -2 → 9-hole -1 → 100% → -1
+    expect(playingHandicap(-2, 100, true)).toBe(-1);
+  });
+});
+
 describe("roundToHalf", () => {
   it("rounds 4.25 up to 4.5 (tie rounds up)", () => expect(roundToHalf(4.25)).toBe(4.5));
   it("rounds 7.75 up to 8.0 (tie rounds up)",  () => expect(roundToHalf(7.75)).toBe(8.0));

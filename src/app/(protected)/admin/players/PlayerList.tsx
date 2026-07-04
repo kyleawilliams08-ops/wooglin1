@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DeleteButton } from "@/components/DeleteButton";
 import { createClient } from "@/lib/supabase/client";
+import { formatHcp } from "@/lib/handicap";
 
 interface Player {
   id: string;
@@ -74,7 +75,7 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                 <div>
                   <p className="font-semibold text-navy">{p.name}</p>
                   <p className="text-xs text-navy/50">
-                    {p.current_index != null ? `Index ${p.current_index}` : "No index"} · <span className="uppercase">{p.role}</span>
+                    {p.current_index != null ? `Index ${formatHcp(p.current_index)}` : "No index"} · <span className="uppercase">{p.role}</span>
                   </p>
                 </div>
               </div>
@@ -114,10 +115,10 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                   />
                   <input
                     name="index"
-                    type="number"
-                    step="0.1"
-                    defaultValue={p.current_index ?? ""}
-                    placeholder="USGA Index"
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={p.current_index != null ? formatHcp(p.current_index) : ""}
+                    placeholder="USGA Index — use +2.0 for plus handicaps"
                     className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy"
                   />
                   <select

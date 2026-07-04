@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
-import { courseHandicap } from "@/lib/handicap";
+import { courseHandicap, formatHcp, parseHcpInput } from "@/lib/handicap";
 
 export default async function TeamRosterPage({ params }: { params: { id: string; teamId: string } }) {
   const player = await requirePlayer();
@@ -142,7 +142,9 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
     const teeIds    = (formData.get("tee_ids") as string).split(",");
     for (const teeId of teeIds) {
       const raw = formData.get(`hcp_${teeId}`) as string;
-      const override = raw !== "" ? parseInt(raw) : null;
+      // Accepts "+2" (plus handicap → stored negative); whole numbers per USGA
+      const parsed = parseHcpInput(raw);
+      const override = parsed != null ? Math.round(parsed) : null;
       await supabase.from("participant_handicaps").upsert({
         event_id:      params.id,
         player_id:     playerId,
@@ -200,7 +202,7 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
                     {ep.is_captain && <span className="ml-1.5 text-xs text-navy/40 font-normal">Captain</span>}
                   </p>
                   <p className="text-xs text-navy/40">
-                    {p?.name} · index {p?.current_index ?? "—"}
+                    {p?.name} · index {formatHcp(p?.current_index)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -236,15 +238,14 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
                           {tee.courses?.name} <span className="text-navy/30">({tee.tee_name})</span>
                         </p>
                         <span className="text-xs text-navy/30 w-16 text-right">
-                          {calc != null ? `calc ${calc}` : "no index"}
+                          {calc != null ? `calc ${formatHcp(calc)}` : "no index"}
                         </span>
                         <input
                           name={`hcp_${tee.id}`}
-                          type="number"
-                          min="0"
-                          max="54"
-                          defaultValue={override ?? calc ?? ""}
-                          placeholder={calc != null ? String(calc) : "—"}
+                          type="text"
+                          inputMode="numeric"
+                          defaultValue={override != null ? formatHcp(override) : calc != null ? formatHcp(calc) : ""}
+                          placeholder={calc != null ? formatHcp(calc) : "—"}
                           className={`w-14 rounded border px-2 py-1 text-center text-sm ${
                             override != null
                               ? "border-navy text-navy font-semibold"
