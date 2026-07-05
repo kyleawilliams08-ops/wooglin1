@@ -175,51 +175,64 @@ export async function recordScoreFeed(supabase: Supa, matchupId: string): Promis
       const leader = diff > 0 ? ctx.homeTeam : ctx.awayTeam;
       let message: string;
 
-      if (r === "halve") {
-        message = diff === 0
-          ? `Hole ${n} halved — all square`
-          : `Hole ${n} halved — ${leader} still ${Math.abs(diff)} up`;
-      } else {
+      // The relevant ball on a side: the player (with team) and gross.
+      // Singles → that side's player; Best Ball/Shamble → best-net ball;
+      // one-score formats → the team itself.
+      const ballFor = (side: "home" | "away"): { name: string; gross: number | null; isTeam: boolean } => {
         const s = ctx.scoreMap[n];
-        let actor: string;
-        let gross: number | null;
-
+        const team = side === "home" ? ctx.homeTeam : ctx.awayTeam;
         if (oneScore) {
-          actor = r === "home" ? ctx.homeTeam : ctx.awayTeam;
-          gross = r === "home" ? s.home_p1_gross : s.away_p1_gross;
-        } else if (ctx.fmt.name === "Singles") {
-          actor = (r === "home" ? ctx.matchup.home_p1?.display_name : ctx.matchup.away_p1?.display_name) ?? (r === "home" ? ctx.homeTeam : ctx.awayTeam);
-          gross = r === "home" ? s.home_p1_gross : s.away_p1_gross;
-        } else {
-          // Best Ball / Shamble: credit the winning side's best-net ball
-          const si = hole.stroke_index;
-          const allSIs = ctx.holes.map((h) => h.stroke_index);
-          const balls = r === "home"
-            ? [
-                { ep: ctx.matchup.home_p1, gross: s.home_p1_gross, phcp: ctx.phcps.homeP1 },
-                { ep: ctx.matchup.home_p2, gross: s.home_p2_gross, phcp: ctx.phcps.homeP2 ?? 0 },
-              ]
-            : [
-                { ep: ctx.matchup.away_p1, gross: s.away_p1_gross, phcp: ctx.phcps.awayP1 },
-                { ep: ctx.matchup.away_p2, gross: s.away_p2_gross, phcp: ctx.phcps.awayP2 ?? 0 },
-              ];
-          const scoredBalls = balls
-            .filter((b) => b.ep && b.gross != null)
-            .map((b) => ({ ...b, net: (b.gross as number) - strokesOnHole(b.phcp, si, allSIs, ctx.nineHole) }))
-            .sort((a, b) => a.net - b.net || (a.gross as number) - (b.gross as number));
-          const best = scoredBalls[0];
-          actor = best?.ep?.display_name ?? (r === "home" ? ctx.homeTeam : ctx.awayTeam);
-          gross = best?.gross ?? null;
+          return { name: team, gross: side === "home" ? s.home_p1_gross : s.away_p1_gross, isTeam: true };
         }
+        if (ctx.fmt.name === "Singles") {
+          const ep = side === "home" ? ctx.matchup.home_p1 : ctx.matchup.away_p1;
+          return {
+            name: ep ? `${ep.display_name} (${team})` : team,
+            gross: side === "home" ? s.home_p1_gross : s.away_p1_gross,
+            isTeam: !ep,
+          };
+        }
+        // Best Ball / Shamble
+        const si = hole.stroke_index;
+        const allSIs = ctx.holes.map((h) => h.stroke_index);
+        const balls = side === "home"
+          ? [
+              { ep: ctx.matchup.home_p1, gross: s.home_p1_gross, phcp: ctx.phcps.homeP1 },
+              { ep: ctx.matchup.home_p2, gross: s.home_p2_gross, phcp: ctx.phcps.homeP2 ?? 0 },
+            ]
+          : [
+              { ep: ctx.matchup.away_p1, gross: s.away_p1_gross, phcp: ctx.phcps.awayP1 },
+              { ep: ctx.matchup.away_p2, gross: s.away_p2_gross, phcp: ctx.phcps.awayP2 ?? 0 },
+            ];
+        const scored = balls
+          .filter((b) => b.ep && b.gross != null)
+          .map((b) => ({ ...b, net: (b.gross as number) - strokesOnHole(b.phcp, si, allSIs, ctx.nineHole) }))
+          .sort((a, b) => a.net - b.net || (a.gross as number) - (b.gross as number));
+        const best = scored[0];
+        return {
+          name: best?.ep ? `${best.ep.display_name} (${team})` : team,
+          gross: best?.gross ?? null,
+          isTeam: !best?.ep,
+        };
+      };
 
-        const verb = gross != null ? deed(gross, hole.par) : "won";
+      if (r === "halve") {
+        const h = ballFor("home");
+        const a = ballFor("away");
+        const state = diff === 0 ? "all square" : `${leader} still ${Math.abs(diff)} up`;
+        message = oneScore
+          ? `Hole ${n} halved — ${state}`
+          : `${h.name} and ${a.name} halved #${n} — ${state}`;
+      } else {
+        const winner = ballFor(r);
+        const verb = winner.gross != null ? deed(winner.gross, hole.par) : "won";
         const context =
           diff === 0 ? "to square the match"
           : (diff > 0 ? "home" : "away") === r ? `to go ${Math.abs(diff)} up`
           : `to cut the deficit to ${Math.abs(diff)}`;
         message = verb === "won"
-          ? `${actor} won #${n} ${context}`
-          : `${actor} ${verb} #${n} ${context}`;
+          ? `${winner.name} won #${n} ${context}`
+          : `${winner.name} ${verb} #${n} ${context}`;
       }
 
       inserts.push({ event_id: ctx.eventId, matchup_id: matchupId, kind: "hole", hole_number: n, message });
