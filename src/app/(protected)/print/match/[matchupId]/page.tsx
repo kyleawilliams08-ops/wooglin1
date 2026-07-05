@@ -112,19 +112,34 @@ export default async function PrintScorecardPage({
   const phcps = computePlayingHcps(fmt, { homeP1: hp1CH, homeP2: hp2CH, awayP1: ap1CH, awayP2: ap2CH }, nineHole);
   const oneScore = isOneScoreFormat(fmt.name);
 
-  // One writing row per ball
-  type Row = { label: string; team: string; color: string; phcp: number; ch: number | null };
+  // One writing row per ball (phcp null = TBD lineup, handicap written in by hand)
+  type Row = { label: string; team: string; color: string; phcp: number | null; ch: number | null };
   const rows: Row[] = [];
   const hc = homeTeam?.color ?? "#0C2D55";
   const ac = awayTeam?.color ?? "#0C2D55";
+  // Blank write-in rows keep the card usable when lineups aren't set yet
+  const singles = fmt.name === "Singles";
+  const blank = "________________";
   if (oneScore) {
-    rows.push({ label: `${homeTeam?.name ?? "Home"} — ${[matchup.home_p1?.display_name, matchup.home_p2?.display_name].filter(Boolean).join(" / ")}`, team: homeTeam?.name ?? "Home", color: hc, phcp: phcps.homeTeam ?? 0, ch: null });
-    rows.push({ label: `${awayTeam?.name ?? "Away"} — ${[matchup.away_p1?.display_name, matchup.away_p2?.display_name].filter(Boolean).join(" / ")}`, team: awayTeam?.name ?? "Away", color: ac, phcp: phcps.awayTeam ?? 0, ch: null });
+    const homeNames = [matchup.home_p1?.display_name, matchup.home_p2?.display_name].filter(Boolean).join(" / ");
+    const awayNames = [matchup.away_p1?.display_name, matchup.away_p2?.display_name].filter(Boolean).join(" / ");
+    rows.push({ label: `${homeTeam?.name ?? "Home"} — ${homeNames || blank}`, team: homeTeam?.name ?? "Home", color: hc, phcp: phcps.homeTeam ?? 0, ch: null });
+    rows.push({ label: `${awayTeam?.name ?? "Away"} — ${awayNames || blank}`, team: awayTeam?.name ?? "Away", color: ac, phcp: phcps.awayTeam ?? 0, ch: null });
   } else {
     if (matchup.home_p1) rows.push({ label: matchup.home_p1.display_name, team: homeTeam?.name ?? "Home", color: hc, phcp: phcps.homeP1, ch: hp1CH });
     if (matchup.home_p2) rows.push({ label: matchup.home_p2.display_name, team: homeTeam?.name ?? "Home", color: hc, phcp: phcps.homeP2 ?? 0, ch: hp2CH });
+    if (!matchup.home_p1 && !matchup.home_p2) {
+      for (let i = 0; i < (singles ? 1 : 2); i++) {
+        rows.push({ label: blank, team: homeTeam?.name ?? "Home", color: hc, phcp: null, ch: null });
+      }
+    }
     if (matchup.away_p1) rows.push({ label: matchup.away_p1.display_name, team: awayTeam?.name ?? "Away", color: ac, phcp: phcps.awayP1, ch: ap1CH });
     if (matchup.away_p2) rows.push({ label: matchup.away_p2.display_name, team: awayTeam?.name ?? "Away", color: ac, phcp: phcps.awayP2 ?? 0, ch: ap2CH });
+    if (!matchup.away_p1 && !matchup.away_p2) {
+      for (let i = 0; i < (singles ? 1 : 2); i++) {
+        rows.push({ label: blank, team: awayTeam?.name ?? "Away", color: ac, phcp: null, ch: null });
+      }
+    }
   }
 
   const strokeMark = (phcp: number, rawSI: number) => {
@@ -246,13 +261,13 @@ export default async function PrintScorecardPage({
               <td className="border border-navy/40 px-1.5 py-3 align-top">
                 <span className="font-bold" style={{ color: r.color }}>{r.label}</span>
                 <span className="block text-[9px] text-navy/50">
-                  {r.ch != null ? `CH ${formatHcp(r.ch)} · ` : ""}plays {r.phcp}
+                  {r.ch != null ? `CH ${formatHcp(r.ch)} · ` : ""}plays {r.phcp ?? "____"}
                 </span>
               </td>
               {holes.map((h) => (
                 <td key={h.hole_number} className="relative border border-navy/40 px-1 py-3">
                   <span className="absolute left-0.5 top-0 text-[8px] text-navy/50">
-                    {strokeMark(r.phcp, h.stroke_index)}
+                    {r.phcp != null ? strokeMark(r.phcp, h.stroke_index) : ""}
                   </span>
                 </td>
               ))}

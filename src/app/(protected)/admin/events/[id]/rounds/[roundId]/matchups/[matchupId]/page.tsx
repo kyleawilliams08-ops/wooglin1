@@ -66,8 +66,19 @@ export default async function EditMatchupPage({
   const homeTeam = teams?.[0] ?? null;
   const awayTeam = teams?.[1] ?? null;
 
-  const canHome = admin || (captainEp != null && captainEp.team_id === homeTeam?.id);
-  const canAway = admin || (captainEp != null && captainEp.team_id === awayTeam?.id);
+  // Once a match has scores, captains are locked out of lineup changes
+  // (admins can still override)
+  const { data: scoreRows } = await supabase
+    .from("hole_scores")
+    .select("home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross")
+    .eq("matchup_id", params.matchupId);
+  const underway = (scoreRows ?? []).some(
+    (r) => r.home_p1_gross != null || r.home_p2_gross != null || r.away_p1_gross != null || r.away_p2_gross != null,
+  );
+
+  const captainMay = captainEp != null && !underway;
+  const canHome = admin || (captainMay && captainEp!.team_id === homeTeam?.id);
+  const canAway = admin || (captainMay && captainEp!.team_id === awayTeam?.id);
   const canMeta = admin; // tee time, status, result, match score
 
   const { data: participantsRaw } = await supabase
@@ -134,7 +145,9 @@ export default async function EditMatchupPage({
 
       {!admin && (
         <p className="rounded-lg bg-parchment px-3 py-2 text-xs text-navy/60">
-          Captain mode — you can set your own team&rsquo;s lineup. Tee times and results are set by the commissioner.
+          {underway
+            ? "This match is underway — lineups are locked. Ask the commissioner if something needs changing."
+            : "Captain mode — you can set your own team's lineup. Tee times and results are set by the commissioner."}
         </p>
       )}
 

@@ -99,6 +99,21 @@ export default async function MatchupsPage({
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   }[];
 
+  // Matches with any entered score lock their lineups (admins can still
+  // override via the Edit page)
+  const matchupIds = matchups.map((m) => m.id);
+  const { data: scoreRows } = matchupIds.length > 0
+    ? await supabase
+        .from("hole_scores")
+        .select("matchup_id, home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross")
+        .in("matchup_id", matchupIds)
+    : { data: [] };
+  const underway = new Set(
+    (scoreRows ?? [])
+      .filter((r) => r.home_p1_gross != null || r.home_p2_gross != null || r.away_p1_gross != null || r.away_p2_gross != null)
+      .map((r) => r.matchup_id),
+  );
+
   // Team rosters for the lineup selects
   const { data: participants } = await supabase
     .from("event_participants")
@@ -144,6 +159,16 @@ export default async function MatchupsPage({
         .maybeSingle();
       const sideTeamId = side === "home" ? homeTeam?.id : awayTeam?.id;
       if (!cap || cap.team_id !== sideTeamId) throw new Error("Not your lineup to set");
+
+      // Captains can't swap players once the match is underway
+      const { data: existing } = await supabase
+        .from("hole_scores")
+        .select("home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross")
+        .eq("matchup_id", matchupId);
+      const hasScores = (existing ?? []).some(
+        (r) => r.home_p1_gross != null || r.home_p2_gross != null || r.away_p1_gross != null || r.away_p2_gross != null,
+      );
+      if (hasScores) throw new Error("Lineup is locked — this match is underway");
     }
 
     const p1 = (formData.get("p1") as string) || null;
@@ -243,6 +268,7 @@ export default async function MatchupsPage({
               ms.map((m) => {
                 const used = usedElsewhere(m.id);
                 const complete = m.status === "complete";
+                const locked = complete || underway.has(m.id);
 
                 const sideBlock = (
                   side: "home" | "away",
@@ -253,7 +279,7 @@ export default async function MatchupsPage({
                   const roster = rosterFor(team?.id).filter(
                     (p) => !used.has(p.id) || p.id === p1?.id || p.id === p2?.id,
                   );
-                  const showForm = editable && !complete;
+                  const showForm = editable && !locked;
                   return (
                     <div className="flex-1 min-w-0 rounded-lg p-2.5" style={{ backgroundColor: `${team?.color ?? "#0C2D55"}12` }}>
                       <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: team?.color ?? "#0C2D55" }}>
@@ -300,6 +326,9 @@ export default async function MatchupsPage({
                       <div className="flex items-center gap-3 text-xs">
                         {complete && m.match_score && (
                           <span className="font-bold text-navy">{m.match_score}</span>
+                        )}
+                        {!complete && underway.has(m.id) && (
+                          <span className="text-navy/40">🔒 underway</span>
                         )}
                         {admin && (
                           <>

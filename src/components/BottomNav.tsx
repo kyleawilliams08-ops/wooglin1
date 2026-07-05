@@ -39,6 +39,9 @@ const tabs = [
   { href: "/menu",     label: "Menu"     },
 ];
 
+// Pages that live "under" the Menu tab even though their URLs don't start with /menu
+const MENU_CHILDREN = ["/menu", "/players", "/history", "/courses", "/admin"];
+
 export function BottomNav() {
   const pathname = usePathname();
 
@@ -49,6 +52,8 @@ export function BottomNav() {
       {allTabs.map((tab) => {
         const active = tab.href === "/"
           ? pathname === "/"
+          : tab.href === "/menu"
+          ? MENU_CHILDREN.some((p) => pathname.startsWith(p))
           : pathname.startsWith(tab.href);
         return (
           <Link
