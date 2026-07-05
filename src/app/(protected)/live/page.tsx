@@ -18,6 +18,11 @@ function fmtPts(n: number): string {
   return String(n);
 }
 
+function dayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00`);
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 function fmtTeeTime(t: string | null): string | null {
   if (!t) return null;
   const [h, m] = t.split(":").map(Number);
@@ -26,7 +31,11 @@ function fmtTeeTime(t: string | null): string | null {
   return `${hr}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-export default async function LivePage() {
+export default async function LivePage({
+  searchParams,
+}: {
+  searchParams: { day?: string };
+}) {
   await requirePlayer();
   const supabase = createClient();
 
@@ -60,11 +69,12 @@ export default async function LivePage() {
   // Rounds
   const { data: roundsRaw } = await supabase
     .from("rounds")
-    .select("id, round_number, name, side, course_tee_id, formats(name, hcp_allowance, hcp_allowance_secondary), course_tees(tee_name, courses(name))")
+    .select("id, round_number, name, side, played_at, course_tee_id, formats(name, hcp_allowance, hcp_allowance_secondary), course_tees(tee_name, courses(name))")
     .eq("event_id", event.id)
     .order("round_number");
   const rounds = (roundsRaw ?? []) as unknown as {
-    id: string; round_number: number; name: string | null; side: string; course_tee_id: string;
+    id: string; round_number: number; name: string | null; side: string; played_at: string | null;
+    course_tee_id: string;
     formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
     course_tees: { tee_name: string; courses: { name: string } | null } | null;
   }[];
@@ -209,6 +219,21 @@ export default async function LivePage() {
   const totalMatches = matchups.length;
   const toWin = totalMatches > 0 ? totalMatches / 2 + 0.5 : null;
 
+  // Day tabs (played_at date, round-name fallback) — totals stay event-wide
+  type Day = { key: string; label: string; roundIds: Set<string> };
+  const days: Day[] = [];
+  for (const r of rounds) {
+    const key = r.played_at ?? `round-${r.id}`;
+    const label = r.played_at ? dayLabel(r.played_at) : (r.name ?? `Round ${r.round_number}`);
+    const existing = days.find((d) => d.key === key);
+    if (existing) existing.roundIds.add(r.id);
+    else days.push({ key, label, roundIds: new Set([r.id]) });
+  }
+  const selectedDay = days.find((d) => d.key === searchParams.day) ?? days[0];
+  const visibleRounds = days.length > 1 && selectedDay
+    ? rounds.filter((r) => selectedDay.roundIds.has(r.id))
+    : rounds;
+
   const names = (a: EPRef, b: EPRef) =>
     [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
 
@@ -249,7 +274,26 @@ export default async function LivePage() {
           <p className="text-sm text-navy/50">No rounds yet.</p>
         )}
 
-        {rounds.map((round) => {
+        {/* Day tabs */}
+        {days.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+            {days.map((d) => (
+              <Link
+                key={d.key}
+                href={`/live?day=${encodeURIComponent(d.key)}`}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
+                  d.key === selectedDay?.key
+                    ? "bg-navy text-off-white border-navy"
+                    : "bg-white text-navy/60 border-hairline"
+                }`}
+              >
+                {d.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {visibleRounds.map((round) => {
           const states = stateByRound[round.id] ?? [];
           const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
           return (
