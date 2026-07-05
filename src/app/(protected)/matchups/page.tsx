@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { recordLineup } from "@/lib/feed";
 
 type EPRef = { id: string; display_name: string } | null;
 
@@ -190,6 +191,7 @@ export default async function MatchupsPage({
     const { error } = await supabase.from("matchups").update(update).eq("id", matchupId);
     // Surface failures (e.g. missing RLS policy) instead of silently "saving"
     if (error) throw new Error(`Couldn't save lineup: ${error.message}`);
+    await recordLineup(supabase, matchupId, side); // best-effort feed entry
     revalidatePath("/matchups");
   }
 

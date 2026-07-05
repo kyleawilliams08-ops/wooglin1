@@ -1005,3 +1005,37 @@ begin
     delete from players where id = d.dupe_id;
   end loop;
 end $$;
+
+-- ============================================================
+-- Clubhouse feed: event log for the Home page live feed
+-- ============================================================
+
+create table if not exists feed_events (
+  id          uuid primary key default gen_random_uuid(),
+  event_id    uuid not null references events(id) on delete cascade,
+  matchup_id  uuid references matchups(id) on delete cascade,
+  kind        text not null check (kind in ('hole','match_final','standings','lineup')),
+  hole_number integer not null default 0,   -- 0 for non-hole kinds
+  message     text not null,
+  created_at  timestamptz not null default now(),
+  unique (matchup_id, kind, hole_number)
+);
+
+create index if not exists feed_events_event_created_idx on feed_events(event_id, created_at desc);
+
+alter table feed_events enable row level security;
+drop policy if exists "authenticated users can read feed" on feed_events;
+drop policy if exists "authenticated users can write feed" on feed_events;
+create policy "authenticated users can read feed"
+  on feed_events for select to authenticated using (true);
+-- Writes come from scoring/lineup server actions running as whoever acted
+-- (players, captains, admins). Loose by design for a friends app.
+create policy "authenticated users can write feed"
+  on feed_events for all to authenticated using (true) with check (true);
+
+-- Realtime so the Home feed updates without refresh
+do $$
+begin
+  alter publication supabase_realtime add table feed_events;
+exception when duplicate_object then null;
+end $$;

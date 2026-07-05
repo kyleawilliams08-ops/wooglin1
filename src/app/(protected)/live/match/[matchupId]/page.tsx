@@ -6,6 +6,7 @@ import { MatchScorecard } from "@/components/MatchScorecard";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { HoleByHole, type HbhHole, type HbhSlot } from "@/components/HoleByHole";
 import { assertCanScore, upsertSingleScore, type SlotKey } from "@/lib/scoring";
+import { recordScoreFeed } from "@/lib/feed";
 import { computePlayingHcps, strokesOnHole, isOneScoreFormat } from "@/lib/matchcalc";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
@@ -193,7 +194,9 @@ export default async function LiveMatchPage({
     await assertCanScore(matchupId);
     if (!["hp1", "hp2", "ap1", "ap2"].includes(slot)) throw new Error("Bad slot");
     if (value !== null && (!Number.isInteger(value) || value < 1 || value > 15)) throw new Error("Bad score");
-    await upsertSingleScore(createClient(), matchupId, holeNumber, slot, value);
+    const sb = createClient();
+    await upsertSingleScore(sb, matchupId, holeNumber, slot, value);
+    await recordScoreFeed(sb, matchupId); // best-effort, never throws
     revalidatePath(currentPath);
     revalidatePath("/live");
   }

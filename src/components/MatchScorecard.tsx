@@ -14,6 +14,7 @@ import {
 import { matchOutcome, outcomeBadge } from "@/lib/matchplay";
 import { ScoreInput } from "@/components/ScoreInput";
 import { assertCanScore, upsertHoleScores } from "@/lib/scoring";
+import { recordScoreFeed, recordMatchFinal } from "@/lib/feed";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,9 @@ export async function MatchScorecard({
   async function saveScores(formData: FormData) {
     "use server";
     await assertCanScore(matchupId);
-    await upsertHoleScores(createClient(), matchupId, formData);
+    const sb = createClient();
+    await upsertHoleScores(sb, matchupId, formData);
+    await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
     revalidatePath("/live");
   }
@@ -199,7 +202,9 @@ export async function MatchScorecard({
   async function saveAndReview(formData: FormData) {
     "use server";
     await assertCanScore(matchupId);
-    await upsertHoleScores(createClient(), matchupId, formData);
+    const sb = createClient();
+    await upsertHoleScores(sb, matchupId, formData);
+    await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
     revalidatePath("/live");
     redirect(reviewHref ?? `${currentPath}?review=1`);
@@ -217,6 +222,7 @@ export async function MatchScorecard({
       result,
       match_score: score,
     }).eq("id", matchupId);
+    await recordMatchFinal(supabase, matchupId, result, score); // best-effort
     revalidatePath(backHref);
     revalidatePath("/live");
     redirect(backHref);

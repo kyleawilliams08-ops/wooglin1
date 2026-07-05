@@ -4,8 +4,24 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { LiveRefresher } from "@/components/LiveRefresher";
 
 // One quip per page load — clubhouse locker-room energy, kept clean.
+const FEED_ICONS: Record<string, string> = {
+  hole: "⛳",
+  match_final: "🏆",
+  standings: "📊",
+  lineup: "📋",
+};
+
+function timeAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 const QUIPS = [
   "Drive for show, putt for dough.",
   "Play well. Or at least dress well.",
@@ -29,6 +45,16 @@ export default async function Home() {
     .limit(1);
   const activeEvent = activeEvents?.[0] ?? null;
 
+  // Clubhouse feed for the active event (written by scoring/lineup actions)
+  const { data: feed } = activeEvent
+    ? await supabase
+        .from("feed_events")
+        .select("id, kind, message, created_at")
+        .eq("event_id", activeEvent.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+    : { data: [] };
+
   const { data: results } = await supabase
     .from("event_results")
     .select("year, winner, location, captains, final_score")
@@ -48,6 +74,7 @@ export default async function Home() {
 
   return (
     <div className="px-4 py-6 space-y-5">
+      <LiveRefresher />
       {/* Masthead greeting */}
       <div className="flex items-center gap-4">
         <Image src="/crest-small.png" alt="Wooglin Cup crest" width={64} height={64} priority
@@ -78,6 +105,28 @@ export default async function Home() {
       ) : (
         <div className="rounded-2xl bg-navy p-5">
           <p className="text-sm text-hairline">No active event — the off-season is for practicing your excuses.</p>
+        </div>
+      )}
+
+      {/* Clubhouse feed — live play-by-play from the course */}
+      {activeEvent && (feed?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-hairline bg-white">
+          <p className="border-b border-hairline px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-navy/50">
+            Clubhouse Feed
+          </p>
+          <ul className="divide-y divide-hairline">
+            {feed!.map((f) => (
+              <li key={f.id} className="flex items-start gap-2.5 px-4 py-2.5">
+                <span className="text-base leading-snug">{FEED_ICONS[f.kind] ?? "📣"}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm leading-snug text-navy ${f.kind === "match_final" || f.kind === "standings" ? "font-semibold" : ""}`}>
+                    {f.message}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-navy/40">{timeAgo(f.created_at)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
