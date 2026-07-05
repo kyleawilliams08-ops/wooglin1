@@ -147,11 +147,24 @@ export default async function MatchupsPage({
     }
 
     const p1 = (formData.get("p1") as string) || null;
-    const p2 = (formData.get("p2") as string) || null;
+    let p2 = (formData.get("p2") as string) || null;
+
+    // Singles has one ball per side; and a player can't partner themselves.
+    const { data: mrow } = await supabase
+      .from("matchups")
+      .select("rounds(formats(name))")
+      .eq("id", matchupId)
+      .single();
+    const fmtName = (mrow as unknown as { rounds: { formats: { name: string } | null } | null } | null)
+      ?.rounds?.formats?.name;
+    if (fmtName === "Singles" || (p2 !== null && p2 === p1)) p2 = null;
+
     const update = side === "home"
       ? { home_p1_id: p1, home_p2_id: p2 }
       : { away_p1_id: p1, away_p2_id: p2 };
-    await supabase.from("matchups").update(update).eq("id", matchupId);
+    const { error } = await supabase.from("matchups").update(update).eq("id", matchupId);
+    // Surface failures (e.g. missing RLS policy) instead of silently "saving"
+    if (error) throw new Error(`Couldn't save lineup: ${error.message}`);
     revalidatePath("/matchups");
   }
 
@@ -192,6 +205,7 @@ export default async function MatchupsPage({
       {selectedDay?.rounds.map((round) => {
         const ms = matchups.filter((m) => m.round_id === round.id);
         const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
+        const isSingles = round.formats?.name === "Singles";
 
         // Participants already placed in OTHER matchups of this round
         const usedElsewhere = (excludeId: string) => {
@@ -250,13 +264,15 @@ export default async function MatchupsPage({
                           <input type="hidden" name="matchup_id" value={m.id} />
                           <input type="hidden" name="side" value={side} />
                           <select name="p1" defaultValue={p1?.id ?? ""} className={selectCls}>
-                            <option value="">Player 1…</option>
+                            <option value="">{isSingles ? "Player…" : "Player 1…"}</option>
                             {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
                           </select>
-                          <select name="p2" defaultValue={p2?.id ?? ""} className={selectCls}>
-                            <option value="">Player 2 (blank for 2v1)</option>
-                            {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-                          </select>
+                          {!isSingles && (
+                            <select name="p2" defaultValue={p2?.id ?? ""} className={selectCls}>
+                              <option value="">Player 2 (blank for 2v1)</option>
+                              {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+                            </select>
+                          )}
                           <button type="submit"
                             className="w-full rounded-lg py-1.5 text-xs font-semibold text-white"
                             style={{ backgroundColor: team?.color ?? "#0C2D55" }}>

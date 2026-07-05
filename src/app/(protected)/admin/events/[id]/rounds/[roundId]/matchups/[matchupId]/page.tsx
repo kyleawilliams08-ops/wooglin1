@@ -107,10 +107,12 @@ export default async function EditMatchupPage({
     if (canHome) {
       update.home_p1_id = (formData.get("home_p1") as string) || null;
       update.home_p2_id = isSingles ? null : ((formData.get("home_p2") as string) || null);
+      if (update.home_p2_id && update.home_p2_id === update.home_p1_id) update.home_p2_id = null;
     }
     if (canAway) {
       update.away_p1_id = (formData.get("away_p1") as string) || null;
       update.away_p2_id = isSingles ? null : ((formData.get("away_p2") as string) || null);
+      if (update.away_p2_id && update.away_p2_id === update.away_p1_id) update.away_p2_id = null;
     }
     if (canMeta) {
       update.tee_time    = (formData.get("tee_time") as string) || null;
