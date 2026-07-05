@@ -4,11 +4,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
 export default async function MatchupsPage({
   params,
+  searchParams,
 }: {
   params: { id: string; roundId: string };
+  searchParams: { error?: string };
 }) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
@@ -92,7 +96,7 @@ export default async function MatchupsPage({
     const nextNum = ((existing?.[0]?.match_number) ?? 0) + 1;
     const teeTime = formData.get("tee_time") as string;
 
-    await supabase.from("matchups").insert({
+    const { error } = await supabase.from("matchups").insert({
       round_id:     params.roundId,
       match_number: nextNum,
       home_p1_id:   formData.get("home_p1") as string || null,
@@ -101,6 +105,7 @@ export default async function MatchupsPage({
       away_p2_id:   isSingles ? null : (formData.get("away_p2") as string || null),
       tee_time:     teeTime || null,
     });
+    failTo(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`, error);
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
@@ -108,17 +113,19 @@ export default async function MatchupsPage({
     "use server";
     const supabase = createClient();
     const teeTime = formData.get("tee_time") as string;
-    await supabase
+    const { error } = await supabase
       .from("matchups")
       .update({ tee_time: teeTime || null })
       .eq("id", formData.get("matchup_id") as string);
+    failTo(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`, error);
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
   async function deleteMatchup(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("matchups").delete().eq("id", formData.get("matchup_id") as string);
+    const { error } = await supabase.from("matchups").delete().eq("id", formData.get("matchup_id") as string);
+    failTo(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`, error);
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
@@ -153,6 +160,7 @@ export default async function MatchupsPage({
       <Link href={`/admin/events/${params.id}`} className="text-sm text-navy/50 hover:text-navy">
         ← {round.name ?? `Round ${round.round_number}`}
       </Link>
+      <ErrorBanner message={searchParams.error} />
 
       <div>
         <h1 className="text-2xl font-display font-bold text-navy">

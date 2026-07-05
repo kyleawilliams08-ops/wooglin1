@@ -5,8 +5,16 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
 import { courseHandicap, formatHcp, parseHcpInput } from "@/lib/handicap";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function TeamRosterPage({ params }: { params: { id: string; teamId: string } }) {
+export default async function TeamRosterPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string; teamId: string };
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -73,20 +81,22 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
     const supabase = createClient();
     const playerId = formData.get("player_id") as string;
     const { data: p } = await supabase.from("players").select("nickname, name").eq("id", playerId).single();
-    await supabase.from("event_participants").insert({
+    const { error } = await supabase.from("event_participants").insert({
       event_id:     params.id,
       team_id:      params.teamId,
       player_id:    playerId,
       display_name: p?.nickname ?? p?.name ?? "",
       is_captain:   formData.get("is_captain") === "on",
     });
+    failTo(`/admin/events/${params.id}/teams/${params.teamId}`, error);
     revalidatePath(`/admin/events/${params.id}/teams/${params.teamId}`);
   }
 
   async function removePlayer(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("event_participants").delete().eq("id", formData.get("ep_id") as string);
+    const { error } = await supabase.from("event_participants").delete().eq("id", formData.get("ep_id") as string);
+    failTo(`/admin/events/${params.id}/teams/${params.teamId}`, error);
     revalidatePath(`/admin/events/${params.id}/teams/${params.teamId}`);
   }
 
@@ -94,7 +104,8 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
     "use server";
     const supabase = createClient();
     const isCaptain = formData.get("is_captain") === "true";
-    await supabase.from("event_participants").update({ is_captain: !isCaptain }).eq("id", formData.get("ep_id") as string);
+    const { error } = await supabase.from("event_participants").update({ is_captain: !isCaptain }).eq("id", formData.get("ep_id") as string);
+    failTo(`/admin/events/${params.id}/teams/${params.teamId}`, error);
     revalidatePath(`/admin/events/${params.id}/teams/${params.teamId}`);
   }
 
@@ -124,12 +135,13 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
       if (p?.current_index == null) continue;
       for (const tee of tees ?? []) {
         const calc = courseHandicap(p.current_index, tee);
-        await supabase.from("participant_handicaps").upsert({
+        const { error } = await supabase.from("participant_handicaps").upsert({
           event_id:       params.id,
           player_id:      ep.player_id,
           course_tee_id:  tee.id,
           calculated_hcp: calc,
         }, { onConflict: "event_id,player_id,course_tee_id", ignoreDuplicates: false });
+        failTo(`/admin/events/${params.id}/teams/${params.teamId}`, error);
       }
     }
     revalidatePath(`/admin/events/${params.id}/teams/${params.teamId}`);
@@ -145,12 +157,13 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
       // Accepts "+2" (plus handicap → stored negative); whole numbers per USGA
       const parsed = parseHcpInput(raw);
       const override = parsed != null ? Math.round(parsed) : null;
-      await supabase.from("participant_handicaps").upsert({
+      const { error } = await supabase.from("participant_handicaps").upsert({
         event_id:      params.id,
         player_id:     playerId,
         course_tee_id: teeId,
         override_hcp:  override,
       }, { onConflict: "event_id,player_id,course_tee_id", ignoreDuplicates: false });
+      failTo(`/admin/events/${params.id}/teams/${params.teamId}`, error);
     }
     revalidatePath(`/admin/events/${params.id}/teams/${params.teamId}`);
   }
@@ -170,6 +183,7 @@ export default async function TeamRosterPage({ params }: { params: { id: string;
         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: team.color }} />
         <h1 className="text-2xl font-display font-bold text-navy">{team.name}</h1>
       </div>
+      <ErrorBanner message={searchParams.error} />
 
       {/* Calculate button */}
       {tees.length > 0 && (

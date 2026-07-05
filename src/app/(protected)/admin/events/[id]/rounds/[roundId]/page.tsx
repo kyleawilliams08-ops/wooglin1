@@ -3,8 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function RoundEditPage({ params }: { params: { id: string; roundId: string } }) {
+export default async function RoundEditPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string; roundId: string };
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -44,7 +52,7 @@ export default async function RoundEditPage({ params }: { params: { id: string; 
   async function updateRound(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("rounds").update({
+    const { error } = await supabase.from("rounds").update({
       course_tee_id: formData.get("course_tee_id") as string,
       format_id:     formData.get("format_id") as string,
       name:          formData.get("name") as string || null,
@@ -52,6 +60,7 @@ export default async function RoundEditPage({ params }: { params: { id: string; 
       played_at:     formData.get("played_at") as string || null,
       status:        formData.get("status") as string,
     }).eq("id", params.roundId);
+    failTo(`/admin/events/${params.id}/rounds/${params.roundId}`, error);
     revalidatePath(`/admin/events/${params.id}`);
     redirect(`/admin/events/${params.id}`);
   }
@@ -64,6 +73,7 @@ export default async function RoundEditPage({ params }: { params: { id: string; 
       <h1 className="text-2xl font-display font-bold text-navy">
         Round {round.round_number}
       </h1>
+      <ErrorBanner message={searchParams.error} />
 
       <form action={updateRound} className="space-y-3">
         <input name="name" defaultValue={round.name ?? ""} placeholder="Label (optional, e.g. Morning)"

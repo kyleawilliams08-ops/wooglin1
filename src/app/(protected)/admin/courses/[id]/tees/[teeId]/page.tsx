@@ -3,8 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function HolesPage({ params }: { params: { id: string; teeId: string } }) {
+export default async function HolesPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string; teeId: string };
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -32,7 +40,8 @@ export default async function HolesPage({ params }: { params: { id: string; teeI
       stroke_index:  parseInt(formData.get(`si_${i + 1}`) as string),
     }));
     for (const h of updates) {
-      await supabase.from("holes").upsert(h, { onConflict: "course_tee_id,hole_number" });
+      const { error } = await supabase.from("holes").upsert(h, { onConflict: "course_tee_id,hole_number" });
+      failTo(`/admin/courses/${params.id}/tees/${params.teeId}`, error);
     }
     revalidatePath(`/admin/courses/${params.id}/tees/${params.teeId}`);
   }
@@ -49,6 +58,7 @@ export default async function HolesPage({ params }: { params: { id: string; teeI
         <h1 className="text-2xl font-display font-bold text-navy">{tee.tee_name} Tees</h1>
         <p className="text-sm text-navy/50 mt-0.5">Rating {tee.rating} / Slope {tee.slope} / Par {tee.par}</p>
       </div>
+      <ErrorBanner message={searchParams.error} />
 
       <form action={saveHoles} className="space-y-4">
         {[1, 2].map((half) => (

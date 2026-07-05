@@ -131,7 +131,8 @@ export default async function EditMatchupPage({
       update.result      = (formData.get("result") as string) || null;
       update.match_score = (formData.get("match_score") as string) || null;
     }
-    await supabase.from("matchups").update(update).eq("id", params.matchupId);
+    const { error } = await supabase.from("matchups").update(update).eq("id", params.matchupId);
+    if (error) throw new Error(`Couldn't save matchup: ${error.message}`);
     revalidatePath(matchupsPath);
     revalidatePath("/matchups");
     redirect(admin ? matchupsPath : "/matchups");

@@ -3,8 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function AdminFormatsPage() {
+export default async function AdminFormatsPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -18,10 +24,11 @@ export default async function AdminFormatsPage() {
     "use server";
     const supabase = createClient();
     const secondary = formData.get("hcp_allowance_secondary") as string;
-    await supabase.from("formats").update({
+    const { error } = await supabase.from("formats").update({
       hcp_allowance:           parseInt(formData.get("hcp_allowance") as string),
       hcp_allowance_secondary: secondary ? parseInt(secondary) : null,
     }).eq("id", formData.get("id") as string);
+    failTo("/admin/formats", error);
     revalidatePath("/admin/formats");
   }
 
@@ -29,6 +36,7 @@ export default async function AdminFormatsPage() {
     <div className="px-4 py-6 space-y-4">
       <Link href="/admin" className="text-sm text-navy/50 hover:text-navy">← Admin</Link>
       <h1 className="text-2xl font-display font-bold text-navy">Formats</h1>
+      <ErrorBanner message={searchParams.error} />
       <p className="text-sm text-navy/50">Adjust the handicap allowance applied for each format.</p>
 
       <ul className="space-y-2">

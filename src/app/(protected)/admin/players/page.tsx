@@ -4,8 +4,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { parseHcpInput } from "@/lib/handicap";
 import { PlayerList } from "./PlayerList";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function AdminPlayersPage() {
+export default async function AdminPlayersPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -18,39 +24,43 @@ export default async function AdminPlayersPage() {
   async function addPlayer(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("players").insert({
+    const { error } = await supabase.from("players").insert({
       name:          formData.get("name") as string,
       nickname:      (formData.get("nickname") as string) || null,
       email:         formData.get("email") as string,
       current_index: parseHcpInput((formData.get("index") as string) ?? ""),
       role:          formData.get("role") as string,
     });
+    failTo("/admin/players", error);
     revalidatePath("/admin/players");
   }
 
   async function updatePlayer(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("players").update({
+    const { error } = await supabase.from("players").update({
       name:          formData.get("name") as string,
       nickname:      (formData.get("nickname") as string) || null,
       email:         formData.get("email") as string,
       current_index: parseHcpInput((formData.get("index") as string) ?? ""),
       role:          formData.get("role") as string,
     }).eq("id", formData.get("id") as string);
+    failTo("/admin/players", error);
     revalidatePath("/admin/players");
   }
 
   async function deletePlayer(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("players").delete().eq("id", formData.get("id") as string);
+    const { error } = await supabase.from("players").delete().eq("id", formData.get("id") as string);
+    failTo("/admin/players", error);
     revalidatePath("/admin/players");
   }
 
   return (
     <div className="px-4 py-6 space-y-6">
       <h1 className="text-2xl font-display font-bold text-navy">Players</h1>
+      <ErrorBanner message={searchParams.error} />
 
       {/* Add player */}
       <form action={addPlayer} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">

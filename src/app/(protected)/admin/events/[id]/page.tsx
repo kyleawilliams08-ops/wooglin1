@@ -4,8 +4,16 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function EventDetailPage({ params }: { params: { id: string } }) {
+export default async function EventDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -114,55 +122,61 @@ export default async function EventDetailPage({ params }: { params: { id: string
   async function updateEvent(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("events").update({
+    const { error } = await supabase.from("events").update({
       name:       formData.get("name") as string,
       location:   formData.get("location") as string || null,
       start_date: formData.get("start_date") as string || null,
       end_date:   formData.get("end_date") as string || null,
       status:     formData.get("status") as string,
     }).eq("id", params.id);
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
   async function deleteEvent(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("events").delete().eq("id", formData.get("id") as string);
+    const { error } = await supabase.from("events").delete().eq("id", formData.get("id") as string);
+    failTo(`/admin/events/${params.id}`, error);
     redirect("/admin/events");
   }
 
   async function addTeam(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("teams").insert({
+    const { error } = await supabase.from("teams").insert({
       event_id: params.id,
       name:     formData.get("name") as string,
       color:    formData.get("color") as string,
     });
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
   async function deleteTeam(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("teams").delete().eq("id", formData.get("team_id") as string);
+    const { error } = await supabase.from("teams").delete().eq("id", formData.get("team_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
   async function addEventCourse(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("event_courses").insert({
+    const { error } = await supabase.from("event_courses").insert({
       event_id:  params.id,
       course_id: formData.get("course_id") as string,
     });
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
   async function removeEventCourse(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("event_courses").delete().eq("id", formData.get("event_course_id") as string);
+    const { error } = await supabase.from("event_courses").delete().eq("id", formData.get("event_course_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
@@ -176,7 +190,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
       .order("round_number", { ascending: false })
       .limit(1);
     const nextNum = ((existing?.[0]?.round_number) ?? 0) + 1;
-    await supabase.from("rounds").insert({
+    const { error } = await supabase.from("rounds").insert({
       event_id:      params.id,
       course_tee_id: formData.get("course_tee_id") as string,
       format_id:     formData.get("format_id") as string,
@@ -185,13 +199,15 @@ export default async function EventDetailPage({ params }: { params: { id: string
       side:          formData.get("side") as string,
       played_at:     formData.get("played_at") as string || null,
     });
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
   async function deleteRound(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("rounds").delete().eq("id", formData.get("round_id") as string);
+    const { error } = await supabase.from("rounds").delete().eq("id", formData.get("round_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
   }
 
@@ -200,6 +216,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
   return (
     <div className="px-4 py-6 space-y-6">
       <Link href="/admin/events" className="text-sm text-navy/50 hover:text-navy">← Events</Link>
+      <ErrorBanner message={searchParams.error} />
 
       {/* Edit event */}
       <form action={updateEvent} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">

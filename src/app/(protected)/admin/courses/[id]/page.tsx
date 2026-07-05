@@ -4,8 +4,16 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function CourseDetailPage({ params }: { params: { id: string } }) {
+export default async function CourseDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -22,36 +30,40 @@ export default async function CourseDetailPage({ params }: { params: { id: strin
   async function updateCourse(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("courses").update({
+    const { error } = await supabase.from("courses").update({
       name:     formData.get("name") as string,
       location: formData.get("location") as string || null,
     }).eq("id", params.id);
+    failTo(`/admin/courses/${params.id}`, error);
     revalidatePath(`/admin/courses/${params.id}`);
   }
 
   async function addTee(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("course_tees").insert({
+    const { error } = await supabase.from("course_tees").insert({
       course_id: params.id,
       tee_name:  formData.get("tee_name") as string,
       rating:    parseFloat(formData.get("rating") as string),
       slope:     parseInt(formData.get("slope") as string),
       par:       parseInt(formData.get("par") as string),
     });
+    failTo(`/admin/courses/${params.id}`, error);
     revalidatePath(`/admin/courses/${params.id}`);
   }
 
   async function deleteTee(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("course_tees").delete().eq("id", formData.get("tee_id") as string);
+    const { error } = await supabase.from("course_tees").delete().eq("id", formData.get("tee_id") as string);
+    failTo(`/admin/courses/${params.id}`, error);
     revalidatePath(`/admin/courses/${params.id}`);
   }
 
   return (
     <div className="px-4 py-6 space-y-6">
       <Link href="/admin/courses" className="text-sm text-navy/50 hover:text-navy">← Courses</Link>
+      <ErrorBanner message={searchParams.error} />
 
       {/* Edit course */}
       <form action={updateCourse} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">

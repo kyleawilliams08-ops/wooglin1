@@ -47,7 +47,8 @@ export default async function AdminHistoryPage({
   async function deleteResult(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("event_results").delete().eq("id", formData.get("id") as string);
+    const { error } = await supabase.from("event_results").delete().eq("id", formData.get("id") as string);
+    if (error) redirect(`/admin/history?error=${encodeURIComponent(error.message)}`);
     revalidatePath("/admin/history");
     revalidatePath("/history");
   }

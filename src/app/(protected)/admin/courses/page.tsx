@@ -4,8 +4,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { failTo } from "@/lib/actionError";
 
-export default async function AdminCoursesPage() {
+export default async function AdminCoursesPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
 
@@ -18,23 +24,26 @@ export default async function AdminCoursesPage() {
   async function addCourse(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("courses").insert({
+    const { error } = await supabase.from("courses").insert({
       name:     formData.get("name") as string,
       location: formData.get("location") as string || null,
     });
+    failTo("/admin/courses", error);
     revalidatePath("/admin/courses");
   }
 
   async function deleteCourse(formData: FormData) {
     "use server";
     const supabase = createClient();
-    await supabase.from("courses").delete().eq("id", formData.get("id") as string);
+    const { error } = await supabase.from("courses").delete().eq("id", formData.get("id") as string);
+    failTo("/admin/courses", error);
     revalidatePath("/admin/courses");
   }
 
   return (
     <div className="px-4 py-6 space-y-6">
       <h1 className="text-2xl font-display font-bold text-navy">Courses</h1>
+      <ErrorBanner message={searchParams.error} />
 
       <form action={addCourse} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
         <p className="font-semibold text-navy text-sm">Add Course</p>
