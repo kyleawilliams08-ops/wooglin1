@@ -45,7 +45,7 @@ export function BottomNav() {
   const allTabs = tabs;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t border-hairline bg-off-white flex pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-hairline bg-off-white flex pb-[env(safe-area-inset-bottom)] print:hidden">
       {allTabs.map((tab) => {
         const active = tab.href === "/"
           ? pathname === "/"

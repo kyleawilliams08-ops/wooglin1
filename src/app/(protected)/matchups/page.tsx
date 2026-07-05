@@ -1,8 +1,10 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
 
-type EPRef = { display_name: string } | null;
+type EPRef = { id: string; display_name: string } | null;
 
 function fmtTeeTime(t: string | null): string | null {
   if (!t) return null;
@@ -12,9 +14,18 @@ function fmtTeeTime(t: string | null): string | null {
   return `${hr}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-// The pairings sheet for the active cup: who plays whom, when, in what format.
-// Admins get manage links into the matchup builder.
-export default async function MatchupsPage() {
+function dayLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00`);
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// The pairings sheet, organized by day. Admins build the shells (rounds,
+// matchups, tee times); captains fill in their team's players right here.
+export default async function MatchupsPage({
+  searchParams,
+}: {
+  searchParams: { day?: string };
+}) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
   const supabase = createClient();
@@ -37,26 +48,28 @@ export default async function MatchupsPage() {
       </div>
     );
   }
+  const eventId = event.id;
 
   const { data: teams } = await supabase
-    .from("teams").select("id, name, color").eq("event_id", event.id).order("name");
+    .from("teams").select("id, name, color").eq("event_id", eventId).order("name");
   const homeTeam = teams?.[0];
   const awayTeam = teams?.[1];
 
-  // Captains of this event can edit their team's lineups
+  // Captains fill lineups for their own team
   const { data: captainEp } = await supabase
     .from("event_participants")
     .select("team_id")
-    .eq("event_id", event.id)
+    .eq("event_id", eventId)
     .eq("player_id", player.id)
     .eq("is_captain", true)
     .maybeSingle();
-  const canEditLineups = admin || captainEp != null;
+  const canEditHome = admin || (captainEp != null && captainEp.team_id === homeTeam?.id);
+  const canEditAway = admin || (captainEp != null && captainEp.team_id === awayTeam?.id);
 
   const { data: roundsRaw } = await supabase
     .from("rounds")
     .select("id, round_number, name, side, played_at, formats(name), course_tees(tee_name, courses(name))")
-    .eq("event_id", event.id)
+    .eq("event_id", eventId)
     .order("round_number");
   const rounds = (roundsRaw ?? []) as unknown as {
     id: string; round_number: number; name: string | null; side: string; played_at: string | null;
@@ -69,10 +82,11 @@ export default async function MatchupsPage() {
         .from("matchups")
         .select(`
           id, round_id, match_number, status, result, match_score, tee_time,
-          home_p1:event_participants!matchups_home_p1_id_fkey(display_name),
-          home_p2:event_participants!matchups_home_p2_id_fkey(display_name),
-          away_p1:event_participants!matchups_away_p1_id_fkey(display_name),
-          away_p2:event_participants!matchups_away_p2_id_fkey(display_name)
+          home_p1_id, home_p2_id, away_p1_id, away_p2_id,
+          home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name),
+          home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name),
+          away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name),
+          away_p2:event_participants!matchups_away_p2_id_fkey(id, display_name)
         `)
         .in("round_id", rounds.map((r) => r.id))
         .order("match_number")
@@ -80,38 +94,126 @@ export default async function MatchupsPage() {
   const matchups = (matchupsRaw ?? []) as unknown as {
     id: string; round_id: string; match_number: number; status: string;
     result: string | null; match_score: string | null; tee_time: string | null;
+    home_p1_id: string | null; home_p2_id: string | null;
+    away_p1_id: string | null; away_p2_id: string | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   }[];
 
-  const names = (a: EPRef, b: EPRef) =>
-    [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
+  // Team rosters for the lineup selects
+  const { data: participants } = await supabase
+    .from("event_participants")
+    .select("id, display_name, team_id")
+    .eq("event_id", eventId)
+    .order("display_name");
+  const rosterFor = (teamId: string | undefined) =>
+    (participants ?? []).filter((p) => p.team_id === teamId);
 
-  const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
+  // ── Day grouping (played_at date, falling back to the round itself) ──────
+  type Day = { key: string; label: string; rounds: typeof rounds };
+  const days: Day[] = [];
+  for (const r of rounds) {
+    const key = r.played_at ?? `round-${r.id}`;
+    const label = r.played_at ? dayLabel(r.played_at) : (r.name ?? `Round ${r.round_number}`);
+    const existing = days.find((d) => d.key === key);
+    if (existing) existing.rounds.push(r);
+    else days.push({ key, label, rounds: [r] });
+  }
+  const selectedDay = days.find((d) => d.key === searchParams.day) ?? days[0];
+
+  // ── Server action: captains/admins set a side's lineup ──────────────────
+  async function setLineup(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) redirect("/login");
+    const matchupId = formData.get("matchup_id") as string;
+    const side = formData.get("side") as "home" | "away";
+
+    // Re-derive authorization server-side
+    const { data: me } = await supabase
+      .from("players").select("id, role").eq("auth_user_id", user.id).single();
+    if (!me) redirect("/login");
+    const meAdmin = me.role === "admin" || me.role === "assistant";
+    if (!meAdmin) {
+      const { data: cap } = await supabase
+        .from("event_participants")
+        .select("team_id")
+        .eq("event_id", eventId)
+        .eq("player_id", me.id)
+        .eq("is_captain", true)
+        .maybeSingle();
+      const sideTeamId = side === "home" ? homeTeam?.id : awayTeam?.id;
+      if (!cap || cap.team_id !== sideTeamId) throw new Error("Not your lineup to set");
+    }
+
+    const p1 = (formData.get("p1") as string) || null;
+    const p2 = (formData.get("p2") as string) || null;
+    const update = side === "home"
+      ? { home_p1_id: p1, home_p2_id: p2 }
+      : { away_p1_id: p1, away_p2_id: p2 };
+    await supabase.from("matchups").update(update).eq("id", matchupId);
+    revalidatePath("/matchups");
+  }
+
+  const selectCls = "w-full rounded-lg border border-hairline bg-white px-2 py-1.5 text-sm text-navy";
 
   return (
-    <div className="px-4 py-6 space-y-5">
+    <div className="px-4 py-6 space-y-4">
       <div>
         <h1 className="text-2xl font-display font-bold text-navy">Matchups</h1>
         <p className="text-sm text-navy/50 mt-0.5">{event.name} · {event.year}</p>
       </div>
 
-      {rounds.length === 0 && (
+      {days.length === 0 && (
         <p className="text-sm text-navy/50">
           No rounds yet.{admin ? " Set them up under Menu → Events." : " Check back once the schedule drops."}
         </p>
       )}
 
-      {rounds.map((round) => {
+      {/* Day tabs */}
+      {days.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+          {days.map((d) => (
+            <Link
+              key={d.key}
+              href={`/matchups?day=${encodeURIComponent(d.key)}`}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
+                d.key === selectedDay?.key
+                  ? "bg-navy text-off-white border-navy"
+                  : "bg-white text-navy/60 border-hairline"
+              }`}
+            >
+              {d.label}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {selectedDay?.rounds.map((round) => {
         const ms = matchups.filter((m) => m.round_id === round.id);
+        const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
+
+        // Participants already placed in OTHER matchups of this round
+        const usedElsewhere = (excludeId: string) => {
+          const used = new Set<string>();
+          for (const m of ms) {
+            if (m.id === excludeId) continue;
+            for (const id of [m.home_p1_id, m.home_p2_id, m.away_p1_id, m.away_p2_id]) {
+              if (id) used.add(id);
+            }
+          }
+          return used;
+        };
+
         return (
-          <div key={round.id}>
-            <div className="mb-2 flex items-center justify-between">
+          <div key={round.id} className="space-y-3">
+            <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">
                 R{round.round_number}{round.name ? ` · ${round.name}` : ""} — {round.course_tees?.courses?.name} · {sideLabel[round.side]} · {round.formats?.name}
               </p>
               {admin && (
                 <Link
-                  href={`/admin/events/${event.id}/rounds/${round.id}/matchups`}
+                  href={`/admin/events/${eventId}/rounds/${round.id}/matchups`}
                   className="text-xs text-navy/50 underline underline-offset-2 shrink-0"
                 >
                   Manage
@@ -120,43 +222,92 @@ export default async function MatchupsPage() {
             </div>
 
             {ms.length === 0 ? (
-              <p className="mb-2 text-xs text-navy/40">
-                Pairings not set yet.{admin ? " Use Manage to build them." : ""}
+              <p className="text-xs text-navy/40">
+                Pairings not set yet.{admin ? " Use Manage to create the matches." : ""}
               </p>
             ) : (
-              <ul className="space-y-2">
-                {ms.map((m) => (
-                  <li key={m.id} className="flex items-stretch gap-2">
-                    <Link
-                      href={`/live/match/${m.id}`}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-navy truncate">
-                          <span style={{ color: homeTeam?.color ?? undefined }}>{names(m.home_p1, m.home_p2)}</span>
-                          <span className="text-navy/40 font-normal"> vs </span>
-                          <span style={{ color: awayTeam?.color ?? undefined }}>{names(m.away_p1, m.away_p2)}</span>
+              ms.map((m) => {
+                const used = usedElsewhere(m.id);
+                const complete = m.status === "complete";
+
+                const sideBlock = (
+                  side: "home" | "away",
+                  team: typeof homeTeam,
+                  p1: EPRef, p2: EPRef,
+                  editable: boolean,
+                ) => {
+                  const roster = rosterFor(team?.id).filter(
+                    (p) => !used.has(p.id) || p.id === p1?.id || p.id === p2?.id,
+                  );
+                  const showForm = editable && !complete;
+                  return (
+                    <div className="flex-1 min-w-0 rounded-lg p-2.5" style={{ backgroundColor: `${team?.color ?? "#0C2D55"}12` }}>
+                      <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: team?.color ?? "#0C2D55" }}>
+                        {team?.name ?? side}
+                      </p>
+                      {showForm ? (
+                        <form action={setLineup} className="space-y-1.5">
+                          <input type="hidden" name="matchup_id" value={m.id} />
+                          <input type="hidden" name="side" value={side} />
+                          <select name="p1" defaultValue={p1?.id ?? ""} className={selectCls}>
+                            <option value="">Player 1…</option>
+                            {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+                          </select>
+                          <select name="p2" defaultValue={p2?.id ?? ""} className={selectCls}>
+                            <option value="">Player 2 (blank for 2v1)</option>
+                            {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
+                          </select>
+                          <button type="submit"
+                            className="w-full rounded-lg py-1.5 text-xs font-semibold text-white"
+                            style={{ backgroundColor: team?.color ?? "#0C2D55" }}>
+                            Save lineup
+                          </button>
+                        </form>
+                      ) : (
+                        <p className="text-base font-semibold text-navy leading-snug">
+                          {[p1?.display_name, p2?.display_name].filter(Boolean).join(" / ") || <span className="text-navy/30">TBD</span>}
                         </p>
-                        <p className="text-xs text-navy/40 mt-0.5">
-                          Match {m.match_number}
-                          {fmtTeeTime(m.tee_time) ? ` · ${fmtTeeTime(m.tee_time)}` : ""}
-                        </p>
+                      )}
+                    </div>
+                  );
+                };
+
+                return (
+                  <div key={m.id} className="rounded-xl border border-hairline bg-white p-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-navy">
+                        Match {m.match_number}
+                        {fmtTeeTime(m.tee_time) && (
+                          <span className="font-semibold text-navy/50"> · {fmtTeeTime(m.tee_time)}</span>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs">
+                        {complete && m.match_score && (
+                          <span className="font-bold text-navy">{m.match_score}</span>
+                        )}
+                        {admin && (
+                          <>
+                            <Link href={`/admin/events/${eventId}/rounds/${round.id}/matchups/${m.id}`}
+                              className="text-navy/50 underline underline-offset-2">Edit</Link>
+                            <Link href={`/print/match/${m.id}`} target="_blank"
+                              className="text-navy/50 underline underline-offset-2">Print</Link>
+                          </>
+                        )}
                       </div>
-                      <span className="shrink-0 text-xs font-semibold text-navy/50">
-                        {m.status === "complete" && m.match_score ? m.match_score : "›"}
-                      </span>
+                    </div>
+
+                    <div className="flex gap-2.5 items-stretch">
+                      {sideBlock("home", homeTeam, m.home_p1, m.home_p2, canEditHome)}
+                      <span className="self-center text-xs font-bold text-navy/30">VS</span>
+                      {sideBlock("away", awayTeam, m.away_p1, m.away_p2, canEditAway)}
+                    </div>
+
+                    <Link href={`/live/match/${m.id}`} className="block text-center text-xs font-semibold text-navy/50 hover:text-navy">
+                      Open match →
                     </Link>
-                    {canEditLineups && (
-                      <Link
-                        href={`/admin/events/${event.id}/rounds/${round.id}/matchups/${m.id}`}
-                        className="flex shrink-0 items-center rounded-xl border border-hairline bg-parchment px-3 text-xs font-semibold text-navy/60 hover:text-navy"
-                      >
-                        Edit
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                );
+              })
             )}
           </div>
         );
