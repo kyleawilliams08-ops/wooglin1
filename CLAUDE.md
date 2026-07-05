@@ -1,127 +1,90 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code sessions in this repo. **V1 is complete and live** — this file reflects the app as built (updated 2026-07-05), not the original plan.
 
 ## Project
 
-Wooglin Cup Clubhouse — a private PWA for an annual Ryder-Cup-style golf trip (~16-25 friends). Not commercial. Priorities: **simplicity, ease of use, maintainability**. Avoid enterprise complexity.
+Wooglin Cup Clubhouse — private PWA for an annual Ryder-Cup-style golf trip (~16–25 friends, USA vs Europe, running since 2014). Not commercial. Priorities: **simplicity, ease of use, maintainability**. Fun, golf-centric branding; the dragon crest (`public/crest.png`) is the identity.
 
 ## Stack
 
-- **Next.js 14.2.35+** (App Router, TypeScript) — stay on 14.x, not 15
-- **Supabase**: Postgres + Auth (magic link) + Realtime + RLS
-- **Tailwind CSS** with custom design tokens (see Brand below)
-- **Vercel** hosting, deploys from GitHub on push
-- **PWA** — installable, basic offline shell
+- **Next.js 14.2.35** (App Router, TypeScript) — stay on 14.x
+- **Supabase**: Postgres + Auth + Realtime + RLS (env in `.env.local`)
+- **Tailwind** tokens: `navy #0C2D55`, `usa-red #BE2F27`, `europe-green #185D3B`, `off-white`, `parchment`, `hairline`, `gold #C3A669` (trophy accent, use sparingly)
+- Fonts: Playfair Display (`font-display`) + Lato (`font-body`) via next/font
+- **Vercel** auto-deploys from `main` on push; PWA (manifest + icons, no service worker)
 
 ## Commands
 
 ```bash
-npm run dev          # local dev server
-npm run build        # production build (run after every milestone)
-npm run lint         # ESLint
-npm test             # Jest unit tests
-npm test -- --testPathPattern=handicap  # run a single test file
+npm run build        # production build — run before every commit
+npm test             # vitest (handicap/matchplay/matchcalc suites)
+npx tsc --noEmit     # typecheck
 ```
 
-## Architecture
+## Working agreement (IMPORTANT)
 
-**Mutations**: Server Actions only — no separate API layer. Always re-check role server-side in every action.
+- **Commit AND push every change** — Kyle relies on Vercel auto-deploy to test. Small, well-messaged commits to `main`.
+- **Kyle runs all SQL manually** in the Supabase SQL editor. Never assume a migration ran. All schema/seed lives in ONE idempotent file: `supabase/migrations.sql` — append new sections at the bottom and tell Kyle exactly what to run.
+- **Seeds must be keyed by NICKNAME, never email** — admins edit emails to real addresses; email-keyed upserts resurrect placeholder duplicates.
+- **TEST DATA WARNING**: user-entered events ("Test1", "Test 2 - Pinehurst") and their matchups/scores/teams are throwaway — never infer real-world facts from them. Real truth: migrations seeds, `player_appearances` + `event_results` (verified backfill), and Kyle.
+- Surface every DB write failure: capture `{ error }` and use `failTo()` (`src/lib/actionError.ts`) + `<ErrorBanner>`, or throw. No silent failures.
+- Verified real facts: USA won 2025 at Pinehurst (Ryan © USA); all-time Europe 7 – USA 5.
 
-**Auth**: Magic link via Supabase Auth. Link `auth.users` → `players` by email at login. Route protection via middleware.
+## Auth (settled after much pain — do not regress)
 
-**Permissions (RLS + server-side mirror)**:
-- Any authenticated member: read all event data
-- Admin/assistant: manage everything
-- Captain: edit their team's lineup (matchup milestone only)
-- Player in a match: enter/edit that match's hole results
-- Enforce in Supabase RLS first; mirror in Server Actions
+- **Primary sign-in = emailed OTP code** typed into the login page (`verifyOtp`, type `"email"`). Magic links break on mobile (PKCE same-browser rule, iOS PWA storage isolation, email link scanners). Keep the code path first-class.
+- SMTP = **Resend**, domain `fairwayfinancialpartners.org` (note `.org`). Custom SMTP is required for the email template (contains `{{ .Token }}`).
+- After sign-in use `window.location.href = "/"` (hard nav) — `router.replace` hits the cached pre-login redirect.
+- **`players.email` is the single source of login truth**: DB trigger `sync_player_auth_link` re-links `auth_user_id` whenever a player's email is edited (Admin → Player Roster). Seed rows use `@wooglin.local` placeholders until real emails are set.
+- A `/` ↔ `/login` redirect loop means "authenticated but no players row" → login shows `?error=unlinked` message.
 
-**Handicap engine**: Pure TypeScript module, zero DB calls. Unit-tested with packet fixtures. Snapshot `course_handicap` + `strokes_received` onto `match_players` at match creation time — later index edits must not rewrite history. Always allow manual strokes override.
+## Roles & permissions (3 layers: page gate → in-action re-check → RLS)
 
-**Realtime**: Supabase Realtime subscriptions on `match_holes` + `matches` for the live scoreboard.
+- **admin / assistant** (`players.role`): everything.
+- **Captain = `event_participants.is_captain`** on the event (the `players.role` value 'captain' is informational only). Captains set their own team's lineups (inline pickers on `/matchups` + side-limited matchup edit page). Lineups lock once the match has any score ("underway") — admins can still override.
+- **Players in a match** can score that match (architecture "scoring exception"). Everyone else views.
+- All members see: Home, Live, Matchups, Player Cards, History, Courses, Menu.
 
-## Data Model
+## Data model (actual tables)
 
 ```
-players(id, auth_user_id, name, nickname, email, avatar_url, current_index, ghin_id, role, created_at)
-events(id, year, name, location, start_date, end_date, status[draft/active/complete])
+players(id, auth_user_id, name, nickname, email UNIQUE, avatar_url, current_index, role)
+events(id, year, name, location, start/end_date, status[draft/active/complete])  -- year NOT unique
 teams(id, event_id, name, color)
-event_participants(id, event_id, player_id[nullable], team_id, display_name, is_captain, deposit_paid)
-courses(id, name, location)
-course_tees(id, course_id, tee_name, rating, slope, par)   -- 18-hole figures only
-holes(id, course_tee_id, hole_number 1-18, par, stroke_index 1-18)
-formats(id, name, team_size_a, team_size_b, hc_method, hc_pct, hc_low_pct, hc_high_pct)
-rounds(id, event_id, round_number, day_label, course_tee_id, side[front/back/full], format_id, is_official, tee_time)
-matches(id, round_id, team_a_id, team_b_id, status[scheduled/in_progress/final], result_text, points_a, points_b, tee_time, sort_order)
-match_players(id, match_id, player_id, side[A/B], course_handicap, strokes_received)
-match_holes(id, match_id, hole_number 1-9, winner[A/B/tie], edited_by, updated_at)
-event_results(event_id, winning_team, final_score, notes)
+event_participants(id, event_id, player_id?, team_id, display_name, is_captain)
+courses / course_tees(rating, slope, par) / holes(hole_number, par, stroke_index)
+formats(name, hcp_allowance, hcp_allowance_secondary)  -- Best Ball 100, Shamble 70, Pinehurst 50, Scramble 35+15, Singles 100
+rounds(id, event_id, round_number, name, side[front/back/full], played_at, course_tee_id, format_id, status)
+matchups(id, round_id, match_number, home/away_p1/p2_id → event_participants, tee_time, status, result[home/away/halve], match_score)
+hole_scores(matchup_id, hole_number, home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross)  -- GROSS per ball
+participant_handicaps(event_id, player_id, course_tee_id, calculated_hcp, override_hcp)  -- integers
+player_appearances(player_id, year, result[W/L/T])  -- 2014+ backfill, drives Appearances/Cup Record
+event_results(year UNIQUE, event_id?, winner, final_score, location, captains, roster, losing_roster, notes)  -- history archive; event_id links real in-app events (the "real cup lineage")
 ```
 
-`event_participants.player_id` is nullable + `display_name` is free text — supports history backfill without login accounts.
+"home" team = first team by name (Europe before USA). Storage bucket `avatars` (public) for player photos.
 
-## Handicap Logic
+## Key modules
 
-- Course handicap (18) = `Index × (Slope ÷ 113) + (Rating − Par)`
-- 9-hole CH = `round(CH18 ÷ 2)`
-- Format-adjusted = `round(9-hole CH × format_pct)`
-- **Play off the low** within the match group only. Low player plays scratch; others get the difference.
-- `hc_method` enum: `individual_pct | team_low_high | team_pct | singles`
-- Scramble/Pinehurst: collapse two partners into one team handicap, then play off low team
-- Best Ball/Shamble/Singles: individual handicaps off low individual
-- Stroke allocation: by `stroke_index` (SI 1 first, wrap past 9)
+- `src/lib/handicap.ts` — pure engine + tests. Course hcp, playing hcp (9-hole halves CH first), `strokesGivenOnHole(phcp, si, holesInRound)` (9-hole wraps at 9!), `normalizeToLowest`, format helpers. **Plus handicaps stored negative, displayed "+2"** — `formatHcp` / `parseHcpInput` everywhere handicaps are shown/entered.
+- `src/lib/matchcalc.ts` — per-matchup playing hcps by format + per-hole results (shared by scorecard, live board, hole-by-hole).
+- `src/lib/matchplay.ts` — match-play outcome with proper closeout ("2&1", dormie, halved).
+- `src/lib/scoring.ts` — `assertCanScore` (admin OR match participant), score upserts.
+- `src/components/MatchScorecard.tsx` — full card (admin route + `/live/match/[id]?view=card`), Save & Review → complete flow (writes status/result/match_score).
+- `src/components/HoleByHole.tsx` — default mobile scorer on `/live/match/[id]`: tap-to-score (instant save), auto-advance (2s), swipe between holes.
+- `src/components/PlayerCard.tsx` — trading-card profile (photo/monogram, stats, career timeline chips, most-recent-cup team color via event_results linkage).
+- `src/components/LiveRefresher.tsx` — Realtime → router.refresh (needs `hole_scores`/`matchups` in the realtime publication).
+- `/print/match/[id]` — admin-only landscape paper-backup scorecard (browser print → PDF).
 
-## Formats (stored as data, not code)
+## Navigation
 
-| Format | Size | Method | Pct |
-|---|---|---|---|
-| Best Ball | 2v2 | individual_pct | 100% |
-| Shamble | 2v2 | individual_pct | 70% |
-| Pinehurst | 2v2 | team_pct | 50% combined |
-| Scramble | 2v2 | team_low_high | 35% low + 15% high |
-| Singles | 1v1 | singles | 100% |
+Bottom tabs: **Home · Live · Matchups · Menu** (Menu highlights for /players, /history, /courses, /admin). Menu = clubhouse pages for all + "Commissioner Tools" for admins. `/admin` redirects to `/menu`; admin tools keep `/admin/...` URLs. Day tabs on Live + Matchups group rounds by `rounds.played_at` (set dates on rounds!).
 
-## Scoring
+## Scoring model (differs from original plan)
 
-- Per hole: mark winner A / B / tie. No gross/net in V1.
-- Each 9-hole match = 1 point (win=1, tie=0.5, loss=0)
-- Points-to-win = `total_points/2 + 0.5` — always derived, never hardcoded
-- Status display: "1 Up thru 4", "All Square thru 6", dormie, "wins 3 & 2"
+Gross scores entered **per ball** per hole; net/hole results/match status computed live (never stored per hole). Completed matchups store `status/result/match_score` — the source of truth for points. Points: win 1 / halve ½; points-to-win = matches/2 + 0.5, always derived.
 
-## Brand / Design Tokens
+## V2 backlog (account for, don't build unasked)
 
-Define in `tailwind.config`:
-- `navy`: `#0C2D55` (primary chrome)
-- `usa-red`: `#BE2F27`
-- `europe-green`: `#185D3B`
-- `off-white`: `#FDFDFD`, `parchment`: `#F4F1EA`, `hairline`: `#E4E0D6`
-
-Fonts as CSS variables (`--font-display`, `--font-body`, `--font-mono`) so webfonts swap without touching components.
-
-## Navigation (mobile-first)
-
-Bottom tab bar: **Home · Live · Players · History · Admin** (Admin tab: admins only)  
-Top header: crest, event name, member name + role, sign out
-
-## Build Discipline
-
-- One milestone at a time. Run `npm run build` after each. Commit per milestone.
-- Deploy to Vercel after milestone 1 so each subsequent milestone is verifiable live.
-- Keep presentation separate from logic. Full visual polish is milestone 12.
-- Seed data must be idempotent.
-
-## Milestones (V1)
-
-1. Scaffold: Next.js + Tailwind + Supabase client + Vercel + PWA manifest
-2. Auth + roles: magic link, player↔auth link by email, route protection, RLS
-3. Events + participants: create event, roster, teams, captains, active event + **SEED**
-4. Courses admin: course/tee/hole CRUD UI
-5. Formats: seed/confirm 5 formats as data
-6. Rounds: define rounds tied to course/tee/side/format
-7. Handicap engine: pure module, off-low, strokes grid, unit tests
-8. Matchups: create matches, assign sides, auto-fill handicaps + override
-9. Match card + hole scoring: A/Tie/B per hole, status calc, dormie/final
-10. Live scoreboard: Realtime, team totals, match status list
-11. Profiles + history: player profile, backfill display
-12. Polish: branding, splash, PWA install prompt
+Push notifications, live draft, GHIN sync, advanced stats/head-to-head, captain records, betting/expenses (CTP, low-net, parlay), photo galleries, player self-photo upload, test-data cleanup before the 13th Cup.
