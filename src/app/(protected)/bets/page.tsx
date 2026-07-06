@@ -45,7 +45,7 @@ async function getActor(supabase: ReturnType<typeof createClient>) {
 export default async function BetsPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; who?: string; status?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
@@ -60,6 +60,25 @@ export default async function BetsPage({
   }));
   const labelOf = new Map(playerOptions.map((p) => [p.id, p.label]));
 
+  // Limit bet participants to the current cup's roster (fall back to
+  // everyone when no event is active — the fund outlives the weekend).
+  const { data: activeEvents } = await supabase
+    .from("events").select("id").eq("status", "active")
+    .order("year", { ascending: false }).limit(1);
+  let rosterIds: Set<string> | null = null;
+  if (activeEvents?.[0]) {
+    const { data: eps } = await supabase
+      .from("event_participants")
+      .select("player_id")
+      .eq("event_id", activeEvents[0].id)
+      .not("player_id", "is", null);
+    const ids = (eps ?? []).map((e) => e.player_id as string);
+    if (ids.length > 0) rosterIds = new Set(ids);
+  }
+  const betOptions = rosterIds
+    ? playerOptions.filter((p) => rosterIds!.has(p.id))
+    : playerOptions;
+
   const { data: betsRaw } = await supabase
     .from("bets")
     .select("id, year, bet_type, amount, description, status, created_by, created_at, bet_participants(id, player_id, side, is_winner, players(nickname, name))")
@@ -67,9 +86,22 @@ export default async function BetsPage({
     .order("created_at", { ascending: false });
   const bets = (betsRaw ?? []) as unknown as Bet[];
 
-  const pending = bets.filter((b) => b.status === "pending");
-  const active = bets.filter((b) => b.status === "active");
-  const settled = bets.filter((b) => b.status === "closed" || b.status === "push");
+  // Bets list filters: default to YOUR bets, all statuses
+  const who = searchParams.who === "all" ? "all" : "me";
+  const statusF = ["pending", "open", "settled"].includes(searchParams.status ?? "")
+    ? (searchParams.status as "pending" | "open" | "settled")
+    : "all";
+  const mine = (b: Bet) => b.bet_participants.some((p) => p.player_id === player.id);
+  const statusMatch = (b: Bet) =>
+    statusF === "all" ? true
+    : statusF === "pending" ? b.status === "pending"
+    : statusF === "open" ? b.status === "active"
+    : b.status === "closed" || b.status === "push";
+  const statusPrio: Record<string, number> = { pending: 0, active: 1, closed: 2, push: 2 };
+  const visible = bets
+    .filter((b) => b.status !== "void" && statusMatch(b) && (who === "me" ? mine(b) : true))
+    .sort((a, b) => (statusPrio[a.status] ?? 3) - (statusPrio[b.status] ?? 3));
+  const flt = (w: string, s: string) => `/bets?who=${w}&status=${s}`;
 
   const totals = ledgerNets(bets.map((b) => ({ ...b, amount: Number(b.amount) })));
   const myNet = totals.get(player.id) ?? 0;
@@ -368,21 +400,40 @@ export default async function BetsPage({
 
       <ErrorBanner message={searchParams.error} />
 
-      <CreateBetForm players={playerOptions} meId={player.id} action={createBet} />
+      <CreateBetForm players={betOptions} meId={player.id} action={createBet} />
 
-      {pending.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy/50">Pending</p>
-          <div className="space-y-2">{pending.map((b) => <BetCard key={b.id} b={b} />)}</div>
+      {/* Bets list with filters */}
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex gap-1.5">
+            {([["me", "My bets"], ["all", "All bets"]] as const).map(([w, label]) => (
+              <Link key={w} href={flt(w, statusF)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  who === w ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
+                }`}>
+                {label}
+              </Link>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            {([["all", "All"], ["pending", "Pending"], ["open", "Open"], ["settled", "Settled"]] as const).map(([s, label]) => (
+              <Link key={s} href={flt(who, s)}
+                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  statusF === s ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
+                }`}>
+                {label}
+              </Link>
+            ))}
+          </div>
         </div>
-      )}
-
-      {active.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy/50">Open Bets</p>
-          <div className="space-y-2">{active.map((b) => <BetCard key={b.id} b={b} />)}</div>
-        </div>
-      )}
+        {visible.length === 0 ? (
+          <p className="text-sm text-navy/50">
+            {who === "me" ? "No bets of yours here — propose one above." : "Nothing here yet."}
+          </p>
+        ) : (
+          <div className="space-y-2">{visible.map((b) => <BetCard key={b.id} b={b} />)}</div>
+        )}
+      </div>
 
       {/* Ledger */}
       <div>
@@ -407,14 +458,6 @@ export default async function BetsPage({
         )}
       </div>
 
-      {settled.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-navy/50 [&::-webkit-details-marker]:hidden">
-            Settled Bets ({settled.length}) <span className="inline-block transition-transform group-open:rotate-90">›</span>
-          </summary>
-          <div className="mt-2 space-y-2">{settled.map((b) => <BetCard key={b.id} b={b} />)}</div>
-        </details>
-      )}
     </div>
   );
 }

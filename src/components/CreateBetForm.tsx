@@ -8,19 +8,21 @@ export interface BetPlayerOption {
 }
 
 const QUICK_BETS = [
-  "Closest to pin",
+  "CTP",
   "Long drive",
   "Low net",
-  "Low gross",
-  "First blood",
+  "Cornhole",
+  "Pool",
+  "Shuffleboard",
   "Snake (3-putt)",
-  "Sandy",
   "Poker",
 ];
 
+const QUICK_AMOUNTS = ["2", "5", "10"];
+
 /**
- * Propose a side bet. The creator is always in the bet: side 1 for
- * 1-on-1/2v2, or one of the field for group bets.
+ * Propose a side bet, tap-first: segmented bet type, quick amounts,
+ * quick descriptions. The creator is always in the bet.
  */
 export function CreateBetForm({
   players,
@@ -32,21 +34,27 @@ export function CreateBetForm({
   action: (formData: FormData) => Promise<void>;
 }) {
   const [type, setType] = useState<"h2h" | "teams" | "group">("h2h");
+  const [amt, setAmt] = useState<string>("5"); // "2" | "5" | "10" | "other"
   const [desc, setDesc] = useState("");
   const others = players.filter((p) => p.id !== meId);
 
   const selectCls = "w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm text-navy";
+  const segBtn = (on: boolean) =>
+    `flex-1 rounded-lg py-2 text-sm font-semibold border transition-colors ${
+      on ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
+    }`;
 
   return (
     <form action={action} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
       <p className="text-sm font-semibold text-navy">Propose a bet</p>
 
-      <select name="bet_type" value={type} onChange={(e) => setType(e.target.value as typeof type)}
-        className={selectCls}>
-        <option value="h2h">1 on 1</option>
-        <option value="teams">2 v 2</option>
-        <option value="group">Group — winner takes all</option>
-      </select>
+      {/* Bet type — one tap */}
+      <input type="hidden" name="bet_type" value={type} />
+      <div className="flex gap-2">
+        <button type="button" className={segBtn(type === "h2h")} onClick={() => setType("h2h")}>1 on 1</button>
+        <button type="button" className={segBtn(type === "teams")} onClick={() => setType("teams")}>2 v 2</button>
+        <button type="button" className={segBtn(type === "group")} onClick={() => setType("group")}>Group</button>
+      </div>
 
       {type === "h2h" && (
         <select name="opponent" required className={selectCls} defaultValue="">
@@ -88,13 +96,29 @@ export function CreateBetForm({
         </div>
       )}
 
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-navy/40">$</span>
-        <input name="amount" type="number" min="1" step="1" required inputMode="numeric"
-          placeholder={type === "group" ? "Stake per player" : "Amount (per person)"}
-          className="w-full rounded-lg border border-hairline bg-white px-3 py-2 pl-7 text-sm text-navy" />
+      {/* Amount — quick taps + Other */}
+      <div className="flex gap-2">
+        {QUICK_AMOUNTS.map((a) => (
+          <button key={a} type="button" className={segBtn(amt === a)} onClick={() => setAmt(a)}>
+            ${a}
+          </button>
+        ))}
+        <button type="button" className={segBtn(amt === "other")} onClick={() => setAmt("other")}>
+          Other
+        </button>
       </div>
+      {amt === "other" ? (
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-navy/40">$</span>
+          <input name="amount" type="number" min="1" step="1" required inputMode="numeric" autoFocus
+            placeholder={type === "group" ? "Stake per player" : "Amount (per person)"}
+            className="w-full rounded-lg border border-hairline bg-white px-3 py-2 pl-7 text-sm text-navy" />
+        </div>
+      ) : (
+        <input type="hidden" name="amount" value={amt} />
+      )}
 
+      {/* Description — quick picks + free text */}
       <div>
         <input name="description" value={desc} onChange={(e) => setDesc(e.target.value)}
           placeholder="What's the bet?"
