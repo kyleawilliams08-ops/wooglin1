@@ -430,3 +430,56 @@ export async function recordBetProtest(supabase: Supa, betId: string, protesterL
     // best-effort
   }
 }
+
+/**
+ * "🤝 Kyle challenges JoeG — CTP ($5)". Posted when a bet is created, so
+ * everyone named in it (and the peanut gallery) knows it exists.
+ */
+export async function recordBetProposed(supabase: Supa, betId: string): Promise<void> {
+  try {
+    const { data: events } = await supabase
+      .from("events").select("id").eq("status", "active")
+      .order("year", { ascending: false }).limit(1);
+    const eventId = events?.[0]?.id;
+    if (!eventId) return;
+
+    const { data: betRaw } = await supabase
+      .from("bets")
+      .select("bet_type, amount, description, created_by, bet_participants(player_id, side, players(nickname, name))")
+      .eq("id", betId)
+      .single();
+    const bet = betRaw as unknown as {
+      bet_type: string; amount: number; description: string | null; created_by: string | null;
+      bet_participants: { player_id: string; side: number | null; players: { nickname: string | null; name: string } | null }[];
+    } | null;
+    if (!bet) return;
+
+    const nameOf = (p: { players: { nickname: string | null; name: string } | null }) =>
+      p.players?.nickname ?? p.players?.name ?? "?";
+    const amt = Number(bet.amount);
+    const money = Number.isInteger(amt) ? `$${amt}` : `$${amt.toFixed(2)}`;
+    const tail = bet.description ? `${bet.description} (${money})` : `${money}`;
+
+    let message: string;
+    if (bet.bet_type === "group") {
+      const creator = bet.bet_participants.find((p) => p.player_id === bet.created_by);
+      const opener = creator ? nameOf(creator) : "Someone";
+      message = `🤝 ${opener} opens a group bet — ${tail} · ${bet.bet_participants.length} in`;
+    } else {
+      const side1 = bet.bet_participants.filter((p) => p.side === 1).map(nameOf).join(" / ");
+      const side2 = bet.bet_participants.filter((p) => p.side === 2).map(nameOf).join(" / ");
+      const verb = bet.bet_participants.filter((p) => p.side === 1).length > 1 ? "challenge" : "challenges";
+      message = `🤝 ${side1} ${verb} ${side2} — ${tail}`;
+    }
+
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "bet",
+      hole_number: 0,
+      message,
+    });
+  } catch {
+    // best-effort
+  }
+}

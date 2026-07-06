@@ -1107,3 +1107,7 @@ alter table bets add constraint bets_status_check
 
 -- Any bets created under the old acceptance flow go live
 update bets set status = 'active' where status = 'pending';
+
+-- Protests remember what status they came from (closed vs push) so
+-- withdraw/dismiss can restore correctly. Pushes are now protestable.
+alter table bets add column if not exists protested_from text;

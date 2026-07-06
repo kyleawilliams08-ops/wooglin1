@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { BetWizard, type WizardPlayer } from "@/components/BetWizard";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
+import { recordBetProposed } from "@/lib/feed";
 
 async function getActor(supabase: ReturnType<typeof createClient>) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -95,7 +96,9 @@ export default async function NewBetPage({
       .from("bet_participants")
       .insert(parts.map((p) => ({ ...p, bet_id: betRow!.id })));
     failTo("/bets/new", pErr);
+    await recordBetProposed(supabase, betRow!.id); // best-effort feed post
     revalidatePath("/bets");
+    revalidatePath("/");
     redirect("/bets");
   }
 

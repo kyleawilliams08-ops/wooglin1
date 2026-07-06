@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ConfirmForm } from "@/components/ConfirmForm";
 import { failTo } from "@/lib/actionError";
 import { recordBetClosed, recordBetProtest } from "@/lib/feed";
 import { ledgerNets, fmtMoney, fmtNet } from "@/lib/bets";
@@ -52,11 +53,11 @@ async function getActor(supabase: ReturnType<typeof createClient>) {
 async function getBet(supabase: ReturnType<typeof createClient>, betId: string) {
   const { data } = await supabase
     .from("bets")
-    .select("id, status, created_by, protested_by, bet_participants(id, player_id, side, is_winner)")
+    .select("id, status, created_by, protested_by, protested_from, bet_participants(id, player_id, side, is_winner)")
     .eq("id", betId)
     .single();
   return data as unknown as {
-    id: string; status: string; created_by: string | null; protested_by: string | null;
+    id: string; status: string; created_by: string | null; protested_by: string | null; protested_from: string | null;
     bet_participants: { id: string; player_id: string; side: number | null; is_winner: boolean | null }[];
   } | null;
 }
@@ -191,11 +192,19 @@ export default async function BetsPage({
     const me = await getActor(supabase);
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
-    if (!bet || bet.status !== "closed") failTo("/bets", { message: "Only settled bets can be protested" });
-    const meLost = bet!.bet_participants.some((p) => p.player_id === me.id && p.is_winner !== true);
-    if (!meLost) failTo("/bets", { message: "Only the losing side can protest" });
+    if (!bet || !(bet.status === "closed" || bet.status === "push")) {
+      failTo("/bets", { message: "Only settled bets can be protested" });
+    }
+    const isPart = bet!.bet_participants.some((p) => p.player_id === me.id);
+    if (!isPart) failTo("/bets", { message: "Only someone in the bet can protest" });
+    if (bet!.status === "closed") {
+      const meLost = bet!.bet_participants.some((p) => p.player_id === me.id && p.is_winner !== true);
+      if (!meLost) failTo("/bets", { message: "Only the losing side can protest a result" });
+    }
     const { error } = await supabase
-      .from("bets").update({ status: "protested", protested_by: me.id }).eq("id", betId);
+      .from("bets")
+      .update({ status: "protested", protested_by: me.id, protested_from: bet!.status })
+      .eq("id", betId);
     failTo("/bets", error);
     await recordBetProtest(supabase, betId, me.label); // best-effort feed post
     revalidatePath("/bets");
@@ -211,8 +220,9 @@ export default async function BetsPage({
     const bet = await getBet(supabase, betId);
     if (!bet || bet.status !== "protested") failTo("/bets", { message: "No protest to withdraw" });
     if (bet!.protested_by !== me.id && !me.admin) failTo("/bets", { message: "Only the protester can withdraw" });
+    const restore = bet!.protested_from === "push" ? "push" : "closed";
     const { error } = await supabase
-      .from("bets").update({ status: "closed", protested_by: null }).eq("id", betId);
+      .from("bets").update({ status: restore, protested_by: null, protested_from: null }).eq("id", betId);
     failTo("/bets", error);
     revalidatePath("/bets");
     revalidatePath("/");
@@ -229,7 +239,7 @@ export default async function BetsPage({
     const meWon = bet!.bet_participants.some((p) => p.player_id === me.id && p.is_winner === true);
     if (!meWon && !me.admin) failTo("/bets", { message: "Only the winning side can concede" });
     const { error } = await supabase
-      .from("bets").update({ status: "void", protested_by: null }).eq("id", betId);
+      .from("bets").update({ status: "void", protested_by: null, protested_from: null }).eq("id", betId);
     failTo("/bets", error);
     revalidatePath("/bets");
     revalidatePath("/");
@@ -241,9 +251,13 @@ export default async function BetsPage({
     const supabase = createClient();
     const me = await getActor(supabase);
     if (!me.admin) failTo("/bets", { message: "Admins only" });
+    const betId = formData.get("bet_id") as string;
+    const bet = await getBet(supabase, betId);
+    if (!bet || bet.status !== "protested") failTo("/bets", { message: "No protest to dismiss" });
+    const restore = bet!.protested_from === "push" ? "push" : "closed";
     const { error } = await supabase
-      .from("bets").update({ status: "closed", protested_by: null })
-      .eq("id", formData.get("bet_id") as string).eq("status", "protested");
+      .from("bets").update({ status: restore, protested_by: null, protested_from: null })
+      .eq("id", betId);
     failTo("/bets", error);
     revalidatePath("/bets");
     revalidatePath("/");
@@ -257,7 +271,7 @@ export default async function BetsPage({
     if (!me.admin) failTo("/bets", { message: "Admins only" });
     const { error } = await supabase
       .from("bets")
-      .update({ status: "active", closed_by: null, closed_at: null, protested_by: null })
+      .update({ status: "active", closed_by: null, closed_at: null, protested_by: null, protested_from: null })
       .eq("id", formData.get("bet_id") as string)
       .in("status", ["closed", "push", "protested"]);
     failTo("/bets", error);
@@ -309,19 +323,22 @@ export default async function BetsPage({
             <div className="flex flex-wrap gap-1.5">
               {b.bet_type !== "group" ? (
                 <>
-                  <form action={closeBet}>
+                  <ConfirmForm action={closeBet}
+                    confirm={`Close this bet: ${sideNames(b, 1)} win${b.bet_participants.filter((p) => p.side === 1).length > 1 ? "" : "s"} ${fmtMoney(Number(b.amount))} per person?`}>
                     <input type="hidden" name="bet_id" value={b.id} />
                     <input type="hidden" name="winner" value="side1" />
                     <button className={`${btn} bg-navy text-off-white`}>{sideNames(b, 1)}</button>
-                  </form>
-                  <form action={closeBet}>
+                  </ConfirmForm>
+                  <ConfirmForm action={closeBet}
+                    confirm={`Close this bet: ${sideNames(b, 2)} win${b.bet_participants.filter((p) => p.side === 2).length > 1 ? "" : "s"} ${fmtMoney(Number(b.amount))} per person?`}>
                     <input type="hidden" name="bet_id" value={b.id} />
                     <input type="hidden" name="winner" value="side2" />
                     <button className={`${btn} bg-navy text-off-white`}>{sideNames(b, 2)}</button>
-                  </form>
+                  </ConfirmForm>
                 </>
               ) : (
-                <form action={closeBet} className="flex flex-1 items-center gap-1.5">
+                <ConfirmForm action={closeBet} className="flex flex-1 items-center gap-1.5"
+                  confirm={`Close this bet with the selected winner taking ${fmtMoney(Number(b.amount) * (b.bet_participants.length - 1))}?`}>
                   <input type="hidden" name="bet_id" value={b.id} />
                   <select name="winner" required defaultValue=""
                     className="flex-1 rounded-lg border border-hairline bg-white px-2 py-1.5 text-xs text-navy">
@@ -331,13 +348,13 @@ export default async function BetsPage({
                     ))}
                   </select>
                   <button className={`${btn} bg-navy text-off-white`}>Set</button>
-                </form>
+                </ConfirmForm>
               )}
-              <form action={closeBet}>
+              <ConfirmForm action={closeBet} confirm="Call this bet a push? No money moves.">
                 <input type="hidden" name="bet_id" value={b.id} />
                 <input type="hidden" name="winner" value="push" />
                 <button className={`${btn} border border-hairline text-navy/60`}>Push</button>
-              </form>
+              </ConfirmForm>
               {(isCreator || admin) && (
                 <form action={cancelBet}>
                   <input type="hidden" name="bet_id" value={b.id} />
@@ -355,7 +372,7 @@ export default async function BetsPage({
               {b.status === "push" ? "Push — no money moves" : `🏆 ${winners.map(pname).join(" / ")}`}
             </p>
             <div className="flex items-center gap-3">
-              {b.status === "closed" && iLost && (
+              {((b.status === "closed" && iLost) || (b.status === "push" && isPart)) && (
                 <form action={protestBet}>
                   <input type="hidden" name="bet_id" value={b.id} />
                   <button className="text-[11px] text-usa-red underline underline-offset-2">Protest</button>
