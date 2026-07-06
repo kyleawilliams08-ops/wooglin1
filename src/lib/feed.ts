@@ -400,3 +400,33 @@ export async function recordBetClosed(supabase: Supa, betId: string): Promise<vo
     // best-effort
   }
 }
+
+/**
+ * "⚠️ JoeG protested a bet — CTP ($5)". Public visibility is the
+ * enforcement mechanism for the no-acceptance betting model.
+ */
+export async function recordBetProtest(supabase: Supa, betId: string, protesterLabel: string): Promise<void> {
+  try {
+    const { data: events } = await supabase
+      .from("events").select("id").eq("status", "active")
+      .order("year", { ascending: false }).limit(1);
+    const eventId = events?.[0]?.id;
+    if (!eventId) return;
+
+    const { data: bet } = await supabase
+      .from("bets").select("amount, description").eq("id", betId).single();
+    if (!bet) return;
+    const amt = Number(bet.amount);
+    const money = Number.isInteger(amt) ? `$${amt}` : `$${amt.toFixed(2)}`;
+
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "bet",
+      hole_number: 0,
+      message: `⚠️ ${protesterLabel} protested a bet — ${bet.description ?? "side bet"} (${money})`,
+    });
+  } catch {
+    // best-effort
+  }
+}

@@ -45,7 +45,7 @@ describe("betNets", () => {
   });
 
   it("push, void, pending, and active bets move no money", () => {
-    for (const status of ["push", "void", "pending", "active"]) {
+    for (const status of ["push", "void", "pending", "active", "protested"]) {
       const n = betNets(bet(status, 50, [["a", true], ["b", false]]));
       expect(n.get("a")).toBe(0);
       expect(n.get("b")).toBe(0);

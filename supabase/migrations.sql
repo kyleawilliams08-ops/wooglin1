@@ -1095,3 +1095,15 @@ create policy "authenticated users can write bet_participants"
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
   check (kind in ('hole','match_final','standings','lineup','bet'));
+
+-- ============================================================
+-- Betting v2: no acceptance (bets are live immediately) + protests
+-- ============================================================
+
+alter table bets add column if not exists protested_by uuid references players(id) on delete set null;
+alter table bets drop constraint if exists bets_status_check;
+alter table bets add constraint bets_status_check
+  check (status in ('pending','active','closed','push','void','protested'));
+
+-- Any bets created under the old acceptance flow go live
+update bets set status = 'active' where status = 'pending';

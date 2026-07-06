@@ -298,7 +298,7 @@ export function BetWizard({
               {isPending ? "Proposing…" : `Propose Bet — $${amount || "?"}`}
             </button>
             <p className="text-center text-[11px] text-navy/40">
-              Goes live once someone in the bet accepts it.
+              Live immediately — the losing side can protest after close-out.
             </p>
           </div>
         )}

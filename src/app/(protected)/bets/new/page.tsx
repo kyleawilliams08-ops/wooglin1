@@ -87,7 +87,7 @@ export default async function NewBetPage({
 
     const { data: betRow, error } = await supabase
       .from("bets")
-      .insert({ year: new Date().getFullYear(), bet_type: type, amount, description, status: "pending", created_by: me.id })
+      .insert({ year: new Date().getFullYear(), bet_type: type, amount, description, status: "active", created_by: me.id })
       .select("id")
       .single();
     failTo("/bets/new", error);

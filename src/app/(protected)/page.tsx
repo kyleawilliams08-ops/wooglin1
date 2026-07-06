@@ -42,16 +42,22 @@ export default async function Home() {
         .limit(10)
     : { data: [] };
 
-  // This year's betting net for the greeting card
-  const { data: yearBets } = await supabase
+  // This year's bets: net for the card + your open/protested ones up top
+  const { data: yearBetsRaw } = await supabase
     .from("bets")
-    .select("status, amount, bet_participants(player_id, is_winner)")
+    .select("id, status, amount, description, bet_type, bet_participants(player_id, is_winner, players(nickname, name))")
     .eq("year", new Date().getFullYear())
-    .eq("status", "closed");
-  const myBetNet = ledgerNets(
-    ((yearBets ?? []) as { status: string; amount: number; bet_participants: { player_id: string; is_winner: boolean | null }[] }[])
-      .map((b) => ({ ...b, amount: Number(b.amount) })),
-  ).get(player.id) ?? 0;
+    .in("status", ["pending", "active", "closed", "protested"]);
+  const yearBets = ((yearBetsRaw ?? []) as unknown as {
+    id: string; status: string; amount: number; description: string | null; bet_type: string;
+    bet_participants: { player_id: string; is_winner: boolean | null; players: { nickname: string | null; name: string } | null }[];
+  }[]).map((b) => ({ ...b, amount: Number(b.amount) }));
+  const myBetNet = ledgerNets(yearBets).get(player.id) ?? 0;
+  const myOpenBets = yearBets
+    .filter((b) =>
+      (b.status === "active" || b.status === "pending" || b.status === "protested") &&
+      b.bet_participants.some((p) => p.player_id === player.id))
+    .sort((a, b) => (a.status === "protested" ? 0 : 1) - (b.status === "protested" ? 0 : 1));
 
   const { data: results } = await supabase
     .from("event_results")
@@ -104,6 +110,44 @@ export default async function Home() {
         <div className="rounded-2xl bg-navy p-5">
           <p className="text-sm text-hairline">No active event — the off-season is for practicing your excuses.</p>
         </div>
+      )}
+
+      {/* Your open bets — the ones that need closing out */}
+      {myOpenBets.length > 0 && (
+        <Link href="/bets" className="block rounded-2xl border border-gold/60 bg-parchment">
+          <p className="border-b border-gold/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-navy/60">
+            💰 Your open bets ({myOpenBets.length})
+          </p>
+          <ul className="divide-y divide-gold/20">
+            {myOpenBets.slice(0, 4).map((b) => {
+              const others = b.bet_participants
+                .filter((p) => p.player_id !== player.id)
+                .map((p) => p.players?.nickname ?? p.players?.name ?? "?")
+                .join(" / ");
+              return (
+                <li key={b.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-navy">
+                      {b.description || (b.bet_type === "group" ? "Group bet" : b.bet_type === "teams" ? "2 v 2" : "1 on 1")}
+                    </p>
+                    <p className="truncate text-xs text-navy/50">w/ {others}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm font-bold tabular-nums text-navy">${Number(b.amount)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      b.status === "protested" ? "bg-usa-red text-white" : "bg-navy/10 text-navy/60"
+                    }`}>
+                      {b.status === "protested" ? "Protested" : "Open"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="border-t border-gold/30 px-4 py-2 text-center text-xs font-semibold text-navy/50">
+            Tap to close out →
+          </p>
+        </Link>
       )}
 
       {/* Clubhouse feed — live play-by-play from the course (latest 10) */}
