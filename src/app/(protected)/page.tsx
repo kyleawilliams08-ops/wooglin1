@@ -6,6 +6,7 @@ import Link from "next/link";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { FeedList, type FeedItem } from "@/components/FeedList";
+import { ledgerNets, fmtNet } from "@/lib/bets";
 
 // One quip per page load — clubhouse locker-room energy, kept clean.
 const QUIPS = [
@@ -40,6 +41,17 @@ export default async function Home() {
         .order("created_at", { ascending: false })
         .limit(10)
     : { data: [] };
+
+  // This year's betting net for the greeting card
+  const { data: yearBets } = await supabase
+    .from("bets")
+    .select("status, amount, bet_participants(player_id, is_winner)")
+    .eq("year", new Date().getFullYear())
+    .eq("status", "closed");
+  const myBetNet = ledgerNets(
+    ((yearBets ?? []) as { status: string; amount: number; bet_participants: { player_id: string; is_winner: boolean | null }[] }[])
+      .map((b) => ({ ...b, amount: Number(b.amount) })),
+  ).get(player.id) ?? 0;
 
   const { data: results } = await supabase
     .from("event_results")
@@ -156,6 +168,19 @@ export default async function Home() {
         <Link href="/history" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors">
           <p className="font-semibold text-navy text-sm">History</p>
           <p className="text-xs text-navy/50 mt-0.5">Past cups</p>
+        </Link>
+        <Link href="/bets" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors col-span-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-navy text-sm">Betting</p>
+              <p className="text-xs text-navy/50 mt-0.5">Side bets &amp; the ledger</p>
+            </div>
+            {myBetNet !== 0 && (
+              <p className={`text-lg font-bold tabular-nums ${myBetNet > 0 ? "text-europe-green" : "text-usa-red"}`}>
+                {fmtNet(myBetNet)}
+              </p>
+            )}
+          </div>
         </Link>
         {isAdmin(player) && (
           <Link href="/menu" className="rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors col-span-2">

@@ -1039,3 +1039,59 @@ begin
   alter publication supabase_realtime add table feed_events;
 exception when duplicate_object then null;
 end $$;
+
+-- ============================================================
+-- Betting fund: year-scoped side bets + ledger
+-- ============================================================
+
+create table if not exists bets (
+  id          uuid primary key default gen_random_uuid(),
+  year        integer not null,
+  bet_type    text not null check (bet_type in ('h2h','teams','group')),
+  amount      numeric(8,2) not null check (amount > 0),
+  description text,
+  -- pending: awaiting acceptance · active: on · closed: winner set
+  -- push: tie, everyone zero · void: declined/cancelled
+  status      text not null default 'pending'
+              check (status in ('pending','active','closed','push','void')),
+  created_by  uuid references players(id) on delete set null,
+  accepted_by uuid references players(id) on delete set null,
+  closed_by   uuid references players(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  closed_at   timestamptz
+);
+
+create table if not exists bet_participants (
+  id        uuid primary key default gen_random_uuid(),
+  bet_id    uuid not null references bets(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  side      integer check (side in (1, 2)),  -- null for group bets
+  is_winner boolean,                          -- set at close
+  unique (bet_id, player_id)
+);
+
+create index if not exists bets_year_idx on bets(year, created_at desc);
+create index if not exists bet_participants_bet_idx on bet_participants(bet_id);
+create index if not exists bet_participants_player_idx on bet_participants(player_id);
+
+alter table bets enable row level security;
+alter table bet_participants enable row level security;
+drop policy if exists "authenticated users can read bets" on bets;
+drop policy if exists "authenticated users can write bets" on bets;
+drop policy if exists "authenticated users can read bet_participants" on bet_participants;
+drop policy if exists "authenticated users can write bet_participants" on bet_participants;
+create policy "authenticated users can read bets"
+  on bets for select to authenticated using (true);
+-- Any member creates/accepts/closes; state transitions are enforced by the
+-- app's server actions (friends-app trust model, admins arbitrate).
+create policy "authenticated users can write bets"
+  on bets for all to authenticated using (true) with check (true);
+create policy "authenticated users can read bet_participants"
+  on bet_participants for select to authenticated using (true);
+create policy "authenticated users can write bet_participants"
+  on bet_participants for all to authenticated using (true) with check (true);
+
+-- Feed: allow 'bet' entries
+alter table feed_events drop constraint if exists feed_events_kind_check;
+alter table feed_events add constraint feed_events_kind_check
+  check (kind in ('hole','match_final','standings','lineup','bet'));

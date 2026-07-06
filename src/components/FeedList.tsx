@@ -13,6 +13,7 @@ const ICONS: Record<string, string> = {
   match_final: "🏆",
   standings: "📊",
   lineup: "📋",
+  bet: "💰",
 };
 
 function timeAgo(iso: string): string {
@@ -25,6 +26,7 @@ function timeAgo(iso: string): string {
 
 /** Where tapping an entry takes you. */
 function hrefFor(f: FeedItem): string {
+  if (f.kind === "bet") return "/bets";
   if (f.kind === "standings" || !f.matchup_id) return "/live";
   if (f.kind === "match_final") return `/live/match/${f.matchup_id}?view=card`;
   return `/live/match/${f.matchup_id}`;

@@ -343,3 +343,60 @@ export async function recordLineup(
     // best-effort
   }
 }
+
+/**
+ * "💰 Kyle takes $20 off JoeG — Closest to pin". Posts to the active
+ * event's feed when a bet is closed (skipped when no event is active).
+ */
+export async function recordBetClosed(supabase: Supa, betId: string): Promise<void> {
+  try {
+    const { data: events } = await supabase
+      .from("events").select("id").eq("status", "active")
+      .order("year", { ascending: false }).limit(1);
+    const eventId = events?.[0]?.id;
+    if (!eventId) return;
+
+    const { data: betRaw } = await supabase
+      .from("bets")
+      .select("id, bet_type, amount, description, status, bet_participants(player_id, is_winner, players(nickname, name))")
+      .eq("id", betId)
+      .single();
+    const bet = betRaw as unknown as {
+      bet_type: string; amount: number; description: string | null; status: string;
+      bet_participants: { player_id: string; is_winner: boolean | null; players: { nickname: string | null; name: string } | null }[];
+    } | null;
+    if (!bet || bet.status !== "closed") return;
+
+    const nameOf = (p: { players: { nickname: string | null; name: string } | null }) =>
+      p.players?.nickname ?? p.players?.name ?? "?";
+    const winners = bet.bet_participants.filter((p) => p.is_winner === true);
+    const losers = bet.bet_participants.filter((p) => p.is_winner !== true);
+    if (winners.length === 0 || losers.length === 0) return;
+
+    const amt = Number(bet.amount);
+    const money = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
+    const wNames = winners.map(nameOf).join(" / ");
+    const lNames = losers.map(nameOf).join(" / ");
+    const tail = bet.description ? ` — ${bet.description}` : "";
+
+    let message: string;
+    if (bet.bet_type === "group") {
+      const pot = losers.length * amt;
+      message = `${wNames} wins ${money(pot)}${tail} (${bet.bet_participants.length}-way)`;
+    } else if (winners.length > 1) {
+      message = `${wNames} take ${money(amt)} each off ${lNames}${tail}`;
+    } else {
+      message = `${wNames} takes ${money(amt)} off ${lNames}${tail}`;
+    }
+
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "bet",
+      hole_number: 0,
+      message,
+    });
+  } catch {
+    // best-effort
+  }
+}
