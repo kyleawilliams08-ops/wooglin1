@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { CreateBetForm } from "@/components/CreateBetForm";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { recordBetClosed } from "@/lib/feed";
@@ -60,25 +59,6 @@ export default async function BetsPage({
   }));
   const labelOf = new Map(playerOptions.map((p) => [p.id, p.label]));
 
-  // Limit bet participants to the current cup's roster (fall back to
-  // everyone when no event is active — the fund outlives the weekend).
-  const { data: activeEvents } = await supabase
-    .from("events").select("id").eq("status", "active")
-    .order("year", { ascending: false }).limit(1);
-  let rosterIds: Set<string> | null = null;
-  if (activeEvents?.[0]) {
-    const { data: eps } = await supabase
-      .from("event_participants")
-      .select("player_id")
-      .eq("event_id", activeEvents[0].id)
-      .not("player_id", "is", null);
-    const ids = (eps ?? []).map((e) => e.player_id as string);
-    if (ids.length > 0) rosterIds = new Set(ids);
-  }
-  const betOptions = rosterIds
-    ? playerOptions.filter((p) => rosterIds!.has(p.id))
-    : playerOptions;
-
   const { data: betsRaw } = await supabase
     .from("bets")
     .select("id, year, bet_type, amount, description, status, created_by, created_at, bet_participants(id, player_id, side, is_winner, players(nickname, name))")
@@ -110,53 +90,6 @@ export default async function BetsPage({
     .sort((a, b) => b[1] - a[1]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
-
-  async function createBet(formData: FormData) {
-    "use server";
-    const supabase = createClient();
-    const me = await getActor(supabase);
-    const type = formData.get("bet_type") as string;
-    const amount = parseFloat(formData.get("amount") as string);
-    const description = (formData.get("description") as string)?.trim() || null;
-    if (!["h2h", "teams", "group"].includes(type)) failTo("/bets", { message: "Unknown bet type" });
-    if (!(amount > 0)) failTo("/bets", { message: "Amount must be positive" });
-
-    const parts: { player_id: string; side: number | null }[] = [];
-    if (type === "h2h") {
-      const opp = formData.get("opponent") as string;
-      if (!opp || opp === me.id) failTo("/bets", { message: "Pick an opponent" });
-      parts.push({ player_id: me.id, side: 1 }, { player_id: opp, side: 2 });
-    } else if (type === "teams") {
-      const partner = formData.get("partner") as string;
-      const opp1 = formData.get("opp1") as string;
-      const opp2 = formData.get("opp2") as string;
-      const ids = [me.id, partner, opp1, opp2];
-      if (ids.some((x) => !x) || new Set(ids).size !== 4) {
-        failTo("/bets", { message: "A 2v2 needs four different players" });
-      }
-      parts.push(
-        { player_id: me.id, side: 1 }, { player_id: partner, side: 1 },
-        { player_id: opp1, side: 2 }, { player_id: opp2, side: 2 },
-      );
-    } else {
-      const ids = (formData.getAll("group_ids") as string[]).filter((x) => x && x !== me.id);
-      if (new Set(ids).size < 2) failTo("/bets", { message: "A group bet needs at least 2 others" });
-      parts.push({ player_id: me.id, side: null });
-      for (const pid of Array.from(new Set(ids))) parts.push({ player_id: pid, side: null });
-    }
-
-    const { data: betRow, error } = await supabase
-      .from("bets")
-      .insert({ year: new Date().getFullYear(), bet_type: type, amount, description, status: "pending", created_by: me.id })
-      .select("id")
-      .single();
-    failTo("/bets", error);
-    const { error: pErr } = await supabase
-      .from("bet_participants")
-      .insert(parts.map((p) => ({ ...p, bet_id: betRow!.id })));
-    failTo("/bets", pErr);
-    revalidatePath("/bets");
-  }
 
   async function acceptBet(formData: FormData) {
     "use server";
@@ -400,7 +333,10 @@ export default async function BetsPage({
 
       <ErrorBanner message={searchParams.error} />
 
-      <CreateBetForm players={betOptions} meId={player.id} action={createBet} />
+      <Link href="/bets/new"
+        className="block w-full rounded-xl bg-navy py-3.5 text-center text-base font-semibold text-off-white">
+        + Propose a Bet
+      </Link>
 
       {/* Bets list with filters */}
       <div>
