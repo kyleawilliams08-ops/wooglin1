@@ -1111,3 +1111,21 @@ update bets set status = 'active' where status = 'pending';
 -- Protests remember what status they came from (closed vs push) so
 -- withdraw/dismiss can restore correctly. Pushes are now protestable.
 alter table bets add column if not exists protested_from text;
+
+-- ============================================================
+-- Feed hygiene: rolling 30-day purge (pg_cron, runs daily at 05:00 UTC)
+-- ============================================================
+
+create extension if not exists pg_cron;
+
+do $$
+begin
+  perform cron.unschedule('purge-old-feed-events');
+exception when others then null;
+end $$;
+
+select cron.schedule(
+  'purge-old-feed-events',
+  '0 5 * * *',
+  $$delete from feed_events where created_at < now() - interval '30 days'$$
+);

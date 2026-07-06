@@ -6,6 +6,7 @@ import Link from "next/link";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { FeedList, type FeedItem } from "@/components/FeedList";
+import { FeedFilter } from "@/components/FeedFilter";
 import { ledgerNets, fmtNet } from "@/lib/bets";
 
 // One quip per page load — clubhouse locker-room energy, kept clean.
@@ -20,8 +21,15 @@ const QUIPS = [
   "The dragon guards the flag.",
 ];
 
-export default async function Home() {
+const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet"];
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: { kinds?: string };
+}) {
   const player = await requirePlayer();
+  const kinds = (searchParams.kinds ?? "").split(",").filter((k) => VALID_KINDS.includes(k));
   const supabase = createClient();
 
   const { data: activeEvents } = await supabase
@@ -33,14 +41,16 @@ export default async function Home() {
   const activeEvent = activeEvents?.[0] ?? null;
 
   // Clubhouse feed for the active event (written by scoring/lineup actions)
-  const { data: feed } = activeEvent
-    ? await supabase
+  let feedQuery = activeEvent
+    ? supabase
         .from("feed_events")
         .select("id, kind, message, created_at, matchup_id")
         .eq("event_id", activeEvent.id)
         .order("created_at", { ascending: false })
         .limit(10)
-    : { data: [] };
+    : null;
+  if (feedQuery && kinds.length > 0) feedQuery = feedQuery.in("kind", kinds);
+  const { data: feed } = feedQuery ? await feedQuery : { data: [] };
 
   // This year's bets: net for the card + your open/protested ones up top
   const { data: yearBetsRaw } = await supabase
@@ -151,12 +161,26 @@ export default async function Home() {
       )}
 
       {/* Clubhouse feed — live play-by-play from the course (latest 10) */}
-      {activeEvent && (feed?.length ?? 0) > 0 && (
+      {activeEvent && ((feed?.length ?? 0) > 0 || kinds.length > 0) && (
         <div className="rounded-2xl border border-hairline bg-white">
-          <p className="border-b border-hairline px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-navy/50">
-            Clubhouse Feed
-          </p>
-          <FeedList items={(feed ?? []) as FeedItem[]} />
+          <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy/50">
+              Clubhouse Feed
+            </p>
+            <span className="flex items-center gap-3">
+              {kinds.length > 0 && (
+                <Link href="/" className="text-[11px] font-semibold text-navy/50 underline underline-offset-2">
+                  Clear filters
+                </Link>
+              )}
+              <FeedFilter />
+            </span>
+          </div>
+          {(feed?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-navy/50">No updates match these filters.</p>
+          ) : (
+            <FeedList items={(feed ?? []) as FeedItem[]} />
+          )}
           <Link href="/feed"
             className="block border-t border-hairline px-4 py-2.5 text-center text-xs font-semibold text-navy/50 hover:text-navy">
             View full feed →
