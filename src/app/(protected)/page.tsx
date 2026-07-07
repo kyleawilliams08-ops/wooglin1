@@ -21,7 +21,7 @@ const QUIPS = [
   "The dragon guards the flag.",
 ];
 
-const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet"];
+const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet", "draft"];
 
 export default async function Home({
   searchParams,
@@ -69,6 +69,16 @@ export default async function Home({
       b.bet_participants.some((p) => p.player_id === player.id))
     .sort((a, b) => (a.status === "protested" ? 0 : 1) - (b.status === "protested" ? 0 : 1));
 
+  // Draft day: feature the draft prominently while it's scheduled or live
+  const { data: upcomingDrafts } = await supabase
+    .from("drafts")
+    .select("id, status, scheduled_at, events(year)")
+    .in("status", ["scheduled", "live"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const draft = upcomingDrafts?.[0] ?? null;
+  const draftYear = (draft?.events as unknown as { year: number } | null)?.year;
+
   const { data: results } = await supabase
     .from("event_results")
     .select("year, winner, location, captains, final_score")
@@ -102,6 +112,45 @@ export default async function Home({
       </div>
 
       <InstallPrompt />
+
+      {/* Draft day — front and center while a draft is scheduled or live */}
+      {draft && (
+        <Link
+          href="/draft"
+          className={`block rounded-2xl p-5 relative overflow-hidden ${
+            draft.status === "live" ? "bg-navy ring-2 ring-gold" : "border border-gold/60 bg-parchment"
+          }`}
+        >
+          {draft.status === "live" ? (
+            <>
+              <span className="absolute top-4 right-4 animate-pulse rounded-full bg-gold px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-navy">
+                ● Live
+              </span>
+              <p className="text-xs uppercase tracking-widest text-hairline/60 mb-1">
+                {draftYear ? `${draftYear} ` : ""}Draft
+              </p>
+              <p className="text-xl font-display font-bold text-off-white">
+                🐉 The draft is LIVE
+              </p>
+              <p className="mt-4 text-sm font-semibold text-gold">Watch the picks →</p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gold mb-1">
+                Draft Day
+              </p>
+              <p className="text-lg font-display font-bold text-navy">
+                {draft.scheduled_at
+                  ? new Date(draft.scheduled_at).toLocaleDateString("en-US", {
+                      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+                    })
+                  : `The ${draftYear ?? ""} draft is coming`}
+              </p>
+              <p className="mt-1 text-sm text-navy/60">Rosters are on the line — see the pool →</p>
+            </>
+          )}
+        </Link>
+      )}
 
       {/* Active event hero */}
       {activeEvent ? (

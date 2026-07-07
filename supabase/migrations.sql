@@ -1174,3 +1174,74 @@ begin
   alter publication supabase_realtime add table admin_alerts;
 exception when duplicate_object then null;
 end $$;
+
+-- ============================================================
+-- Live Draft: snake draft that sets event rosters
+-- ============================================================
+
+-- One draft per event (enforced by the unique index). The pool is that
+-- event's non-captain participants with no team yet; each pick assigns
+-- event_participants.team_id, so finishing the draft = rosters are set.
+create table if not exists drafts (
+  id                      uuid primary key default gen_random_uuid(),
+  event_id                uuid not null references events(id) on delete cascade,
+  status                  text not null default 'scheduled'
+                          check (status in ('scheduled','live','complete')),
+  scheduled_at            timestamptz,
+  first_pick_team_id      uuid references teams(id) on delete set null,
+  pick_seconds            integer not null default 120,  -- soft clock only
+  call_link               text,                          -- FaceTime/Zoom link
+  current_pick_started_at timestamptz,                   -- soft clock anchor
+  created_at              timestamptz not null default now()
+);
+
+create unique index if not exists drafts_event_unique on drafts(event_id);
+
+create table if not exists draft_picks (
+  id             uuid primary key default gen_random_uuid(),
+  draft_id       uuid not null references drafts(id) on delete cascade,
+  pick_number    integer not null,
+  team_id        uuid not null references teams(id) on delete cascade,
+  participant_id uuid not null references event_participants(id) on delete cascade,
+  picked_by      uuid references players(id) on delete set null,
+  created_at     timestamptz not null default now(),
+  unique (draft_id, pick_number),     -- guards double-tap races
+  unique (draft_id, participant_id)   -- a player can only be drafted once
+);
+
+create index if not exists draft_picks_draft_idx on draft_picks(draft_id, pick_number);
+
+alter table drafts enable row level security;
+alter table draft_picks enable row level security;
+drop policy if exists "authenticated users can read drafts" on drafts;
+drop policy if exists "authenticated users can write drafts" on drafts;
+drop policy if exists "authenticated users can read draft_picks" on draft_picks;
+drop policy if exists "authenticated users can write draft_picks" on draft_picks;
+create policy "authenticated users can read drafts"
+  on drafts for select to authenticated using (true);
+-- Turn order / captain-only picking is enforced by the server actions
+-- (friends-app trust model, consistent with bets/feed).
+create policy "authenticated users can write drafts"
+  on drafts for all to authenticated using (true) with check (true);
+create policy "authenticated users can read draft_picks"
+  on draft_picks for select to authenticated using (true);
+create policy "authenticated users can write draft_picks"
+  on draft_picks for all to authenticated using (true) with check (true);
+
+-- Realtime so every phone (and the TV) sees picks the moment they happen
+do $$
+begin
+  alter publication supabase_realtime add table drafts;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table draft_picks;
+exception when duplicate_object then null;
+end $$;
+
+-- Feed: allow 'draft' entries (draft live / each pick / rosters set)
+alter table feed_events drop constraint if exists feed_events_kind_check;
+alter table feed_events add constraint feed_events_kind_check
+  check (kind in ('hole','match_final','standings','lineup','bet','draft'));

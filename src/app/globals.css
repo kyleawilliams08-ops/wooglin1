@@ -37,3 +37,26 @@ body {
 }
 .hole-in-fwd  { animation: hole-in-fwd 180ms ease-out; }
 .hole-in-back { animation: hole-in-back 180ms ease-out; }
+
+/* Draft room: pick-reveal takeover + board row entrance */
+@keyframes draft-reveal-bg {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes draft-reveal-card {
+  0%   { opacity: 0; transform: scale(0.5) translateY(40px); }
+  70%  { opacity: 1; transform: scale(1.06) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes draft-reveal-name {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes draft-row-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+.draft-reveal-bg   { animation: draft-reveal-bg 250ms ease-out; }
+.draft-reveal-card { animation: draft-reveal-card 550ms cubic-bezier(0.18, 1.25, 0.4, 1); }
+.draft-reveal-name { animation: draft-reveal-name 400ms ease-out 250ms backwards; }
+.draft-row-in      { animation: draft-row-in 300ms ease-out; }

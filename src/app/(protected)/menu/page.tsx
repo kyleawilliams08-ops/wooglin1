@@ -6,6 +6,7 @@ export default async function MenuPage() {
   const player = await requirePlayer();
 
   const clubhouse = [
+    { href: "/draft",   label: "Draft Room",   desc: "The live draft — watch or make your picks" },
     { href: "/players", label: "Player Cards", desc: "Appearances, records & profiles" },
     { href: "/history", label: "History",      desc: "Past cups and champions" },
     { href: "/courses", label: "Courses",      desc: "Courses, tees & ratings" },
@@ -14,6 +15,7 @@ export default async function MenuPage() {
   const commissioner = [
     { href: "/admin/events",  label: "Events",         desc: "Events, teams, rosters, rounds & matchups" },
     { href: "/admin/alerts",  label: "Admin Alerts",   desc: "Full-screen notices everyone must acknowledge" },
+    { href: "/admin/draft",   label: "Draft Setup",    desc: "Schedule the draft, first pick & pick clock" },
     { href: "/admin/players", label: "Player Roster",  desc: "Players, emails & handicap indexes" },
     { href: "/admin/courses", label: "Manage Courses", desc: "Course, tee & hole setup" },
     { href: "/admin/formats", label: "Formats",        desc: "Handicap allowances per format" },

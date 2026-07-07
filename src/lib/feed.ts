@@ -483,3 +483,22 @@ export async function recordBetProposed(supabase: Supa, betId: string): Promise<
     // best-effort
   }
 }
+
+/**
+ * Draft-room announcements: "🐉 The draft is LIVE", "📋 Rd 1 · Pick 1: Joey →
+ * Team USA", "✅ The draft is complete". Best-effort like everything here —
+ * a feed hiccup must never block a pick.
+ */
+export async function recordDraftEvent(supabase: Supa, eventId: string, message: string): Promise<void> {
+  try {
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "draft",
+      hole_number: 0,
+      message,
+    });
+  } catch {
+    // best-effort
+  }
+}

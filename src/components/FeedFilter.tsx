@@ -9,6 +9,7 @@ const KINDS = [
   ["standings", "📊 Standings"],
   ["lineup", "📋 Lineups"],
   ["bet", "💰 Bets"],
+  ["draft", "🐉 Draft"],
 ] as const;
 
 /**

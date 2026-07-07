@@ -62,6 +62,8 @@ participant_handicaps(event_id, player_id, course_tee_id, calculated_hcp, overri
 player_appearances(player_id, year, result[W/L/T])  -- 2014+ backfill, drives Appearances/Cup Record
 event_results(year UNIQUE, event_id?, winner, final_score, location, captains, roster, losing_roster, notes)  -- history archive; event_id links real in-app events (the "real cup lineage")
 admin_alerts(id, title?, message, created_by) / alert_dismissals(alert_id, player_id PK pair)  -- full-screen notices; overlay shows until the player's dismissal row exists
+drafts(id, event_id UNIQUE, status[scheduled/live/complete], scheduled_at, first_pick_team_id, pick_seconds, call_link, current_pick_started_at)  -- snake draft; pool = event's non-captain participants with team_id NULL
+draft_picks(draft_id, pick_number, team_id, participant_id, picked_by)  -- unique (draft,pick_number)+(draft,participant); each pick writes event_participants.team_id, so draft completion = rosters set
 ```
 
 "home" team = first team by name (Europe before USA). Storage bucket `avatars` (public) for player photos.
@@ -82,6 +84,7 @@ admin_alerts(id, title?, message, created_by) / alert_dismissals(alert_id, playe
 - `src/components/LineupPicker.tsx` + `/matches/lineup/[id]?side=&day=` — full-page tappable avatar-grid lineup setting (captains own side; locked once underway; Singles max 1; threads ?day= back).
 - `src/components/BetWizard.tsx` (/bets/new), `CardMenu` (ellipsis dropdowns), `FeedFilter` (?kinds= bottom sheet), `ConfirmForm` (confirm-before-submit).
 - `src/components/AlertOverlay.tsx` + `src/lib/alertActions.ts` + `/admin/alerts` — admin alerts: full-screen takeover (mounted in the protected layout) until each player taps OK/✕; realtime-published so open sessions pop instantly; admins create/edit/delete from Menu → Admin Alerts ("seen by X of Y" counts).
+- `src/lib/draft.ts` (pure snake order + soft clock, tested) + `src/lib/draftActions.ts` (makePick/undoLastPick: captain-of-on-clock-team or admin; unique pick_number settles races; pick rollback if roster write fails) + `/draft` (`DraftRoom.tsx`: scheduled/live/complete moods, realtime, pick-reveal animation, ?tv=1 chrome-free casting view) + `/admin/draft` (schedule, first pick, soft pick clock, call link, start/reset/delete). Draft pops on Home while scheduled/live; feed kind 'draft' posts live/picks/complete/undo.
 
 ## Clubhouse feed
 
