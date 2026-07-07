@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repo. **V1 is complete and live** — this file reflects the app as built (updated 2026-07-05), not the original plan.
+Guidance for Claude Code sessions in this repo. **V1 is complete and live** — this file reflects the app as built (updated 2026-07-06), not the original plan.
 
 ## Project
 
@@ -76,6 +76,18 @@ event_results(year UNIQUE, event_id?, winner, final_score, location, captains, r
 - `src/components/PlayerCard.tsx` — trading-card profile (photo/monogram, stats, career timeline chips, most-recent-cup team color via event_results linkage).
 - `src/components/LiveRefresher.tsx` — Realtime → router.refresh (needs `hole_scores`/`matchups` in the realtime publication).
 - `/print/match/[id]` — admin-only landscape paper-backup scorecard (browser print → PDF).
+- `src/lib/feed.ts` — clubhouse-feed writers (ALL best-effort: feed failure must never break scoring/bets). Hole events idempotent per (matchup, hole).
+- `src/lib/bets.ts` — betting money math + tests. Per-person stakes: every loser pays the stake, pot splits among winners (covers 1v1/2v2/group). Only status 'closed' moves money.
+- `src/components/LineupPicker.tsx` + `/matches/lineup/[id]?side=&day=` — full-page tappable avatar-grid lineup setting (captains own side; locked once underway; Singles max 1; threads ?day= back).
+- `src/components/BetWizard.tsx` (/bets/new), `CardMenu` (ellipsis dropdowns), `FeedFilter` (?kinds= bottom sheet), `ConfirmForm` (confirm-before-submit).
+
+## Clubhouse feed
+
+`feed_events` (event-scoped, realtime published): kinds hole / match_final / standings / lineup / bet, written by the existing server actions. Home shows latest 10 (+ filter funnel + "View full feed" → /feed, latest 100). Hole entries are write-once; finals/standings/lineups update in place. pg_cron job purges rows >30 days. Kyle's examples: "Kyle (USA) birdied #8 to square the match", "Team USA (Joey / Ross) def. Team Europe … 4&3", "USA now leads 9½ to 8½".
+
+## Betting fund
+
+Year-scoped side bets (NOT event-tied): `bets` + `bet_participants`. Lifecycle: propose via wizard (/bets/new, roster-limited, live IMMEDIATELY — no acceptance) → any participant closes with a ConfirmForm tap (side buttons / group winner / push) → losing side can PROTEST closed bets, any participant can protest a push (protested = frozen out of ledger, `protested_from` remembers restore target) → resolve: protester withdraws, winners concede (void), or admin dismisses/reopens. Creator/admin can cancel open bets. Ledger = everyone's net (tap through to /bets/player/[id] audit trail); "Needs your action" panel pins your open/protested bets; Home shows a Your-open-bets card + your net. Feed posts on propose/close/protest.
 
 ## Navigation
 
