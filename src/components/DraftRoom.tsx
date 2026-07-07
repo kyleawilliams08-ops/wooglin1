@@ -254,11 +254,19 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
                 <p className="mt-1 text-xl text-hairline/70">{draft.eventName}</p>
               </div>
             </div>
-            {draft.status === "live" && (
-              <span className="animate-pulse rounded-full bg-gold px-5 py-2 text-xl font-bold uppercase tracking-widest text-navy">
-                Live
-              </span>
-            )}
+            <div className="flex items-center gap-4">
+              {draft.status === "live" && (
+                <span className="animate-pulse rounded-full bg-gold px-5 py-2 text-xl font-bold uppercase tracking-widest text-navy">
+                  Live
+                </span>
+              )}
+              <Link
+                href="/draft"
+                className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
+              >
+                ✕ Exit TV
+              </Link>
+            </div>
           </div>
 
           {draft.status === "live" && (
