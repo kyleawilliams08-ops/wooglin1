@@ -104,4 +104,4 @@ Gross scores entered **per ball** per hole; net/hole results/match status comput
 
 ## V2 backlog (account for, don't build unasked)
 
-Push notifications, live draft, GHIN sync, advanced stats/head-to-head, captain records, betting/expenses (CTP, low-net, parlay), photo galleries, player self-photo upload, test-data cleanup before the 13th Cup.
+Push notifications, live draft, GHIN sync, advanced stats/head-to-head, captain records, betting/expenses (CTP, low-net, parlay), photo galleries, player self-photo upload, test-data cleanup before the 13th Cup. Draft-room "view player card" modal (ⓘ on each pool tile → `PlayerCard`; deferred until the card holds more than the tile already shows — pairs with advanced stats; mind the tap-to-draft gesture conflict).
