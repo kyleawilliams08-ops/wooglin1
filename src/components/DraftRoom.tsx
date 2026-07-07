@@ -120,20 +120,33 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     return () => clearInterval(t);
   }, [draft.status]);
 
-  // Pick reveal: when the pick count grows while we're watching, celebrate.
+  // Pick reveal: when a new pick lands while we're watching, celebrate.
+  // Keyed on the pick COUNT (a primitive) — not the picks array, whose
+  // reference changes on every router.refresh(). A single pick fires several
+  // realtime refreshes (the draft_picks insert + the drafts clock update);
+  // depending on the array would re-run this effect on each one and its
+  // cleanup would cancel the dismiss timer, freezing the overlay on. The
+  // count only moves on a real pick, so the timer survives the extra
+  // refreshes. Baselining on mount avoids replaying picks already on the
+  // board; undo/reset lower the count, so the next pick reveals fresh.
+  const pickCount = draft.picks.length;
   const [reveal, setReveal] = useState<DraftPickView | null>(null);
-  const prevCount = useRef<number | null>(null);
+  const seenCount = useRef<number | null>(null);
   useEffect(() => {
-    const count = draft.picks.length;
-    if (prevCount.current !== null && count > prevCount.current) {
-      const newest = draft.picks[draft.picks.length - 1];
-      setReveal(newest);
+    if (seenCount.current === null) {
+      seenCount.current = pickCount; // first render — baseline, don't replay
+      return;
+    }
+    if (pickCount > seenCount.current) {
+      seenCount.current = pickCount;
+      setReveal(draft.picks[pickCount - 1]);
       const t = setTimeout(() => setReveal(null), tv ? 5000 : 3200);
-      prevCount.current = count;
       return () => clearTimeout(t);
     }
-    prevCount.current = count;
-  }, [draft.picks, tv]);
+    seenCount.current = pickCount;
+    // draft.picks[pickCount-1] read intentionally; pickCount gates it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickCount, tv]);
 
   const nextPick = draft.picks.length + 1;
   const onClock = draft.teams[teamIndexForPick(nextPick)];
