@@ -153,7 +153,7 @@ export function HoleByHole({
     <div className="px-4 py-5 pb-8 space-y-4" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* Top bar */}
       <div className="flex items-center justify-between">
-        <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">← Live</Link>
+        <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">← Matches</Link>
         <Link href={cardHref} className="text-sm font-medium text-navy/60 underline underline-offset-2">
           Full scorecard
         </Link>

@@ -54,7 +54,7 @@ export default async function PrintScorecardPage({
     id: string; round_id: string; match_number: number; tee_time: string | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
-  if (!matchup) redirect("/matchups");
+  if (!matchup) redirect("/matches");
 
   const { data: roundRaw } = await supabase
     .from("rounds")
@@ -67,7 +67,7 @@ export default async function PrintScorecardPage({
     formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
     course_tees: { tee_name: string; rating: number; slope: number; par: number; courses: { name: string } | null } | null;
   } | null;
-  if (!round?.formats) redirect("/matchups");
+  if (!round?.formats) redirect("/matches");
 
   const fmt = round.formats!;
   const nineHole = round.side !== "full";
@@ -167,7 +167,7 @@ export default async function PrintScorecardPage({
 
       {/* Screen-only controls */}
       <div className="flex items-center justify-between print:hidden">
-        <Link href="/matchups" className="text-sm text-navy/50 hover:text-navy">← Matchups</Link>
+        <Link href="/matches" className="text-sm text-navy/50 hover:text-navy">← Matches</Link>
         <PrintButton />
       </div>
 

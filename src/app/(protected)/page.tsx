@@ -105,7 +105,7 @@ export default async function Home({
 
       {/* Active event hero */}
       {activeEvent ? (
-        <Link href="/live" className="block rounded-2xl bg-navy p-5 relative overflow-hidden">
+        <Link href="/matches" className="block rounded-2xl bg-navy p-5 relative overflow-hidden">
           <span className="absolute top-4 right-4 text-[10px] font-bold tracking-widest uppercase text-navy bg-gold rounded-full px-2.5 py-1">
             Live
           </span>
@@ -114,7 +114,7 @@ export default async function Home({
           <p className="text-sm text-hairline mt-1">
             {activeEvent.location}{activeEvent.location ? " · " : ""}{activeEvent.year}
           </p>
-          <p className="mt-4 text-sm font-semibold text-gold">Open the Live Scoreboard →</p>
+          <p className="mt-4 text-sm font-semibold text-gold">Matches &amp; live scoring →</p>
         </Link>
       ) : (
         <div className="rounded-2xl bg-navy p-5">

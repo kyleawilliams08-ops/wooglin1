@@ -134,13 +134,13 @@ export default async function EditMatchupPage({
     const { error } = await supabase.from("matchups").update(update).eq("id", params.matchupId);
     if (error) throw new Error(`Couldn't save matchup: ${error.message}`);
     revalidatePath(matchupsPath);
-    revalidatePath("/matchups");
-    redirect(admin ? matchupsPath : "/matchups");
+    revalidatePath("/matches");
+    redirect(admin ? matchupsPath : "/matches");
   }
 
   return (
     <div className="px-4 py-6 space-y-6">
-      <Link href={admin ? matchupsPath : "/matchups"} className="text-sm text-navy/50 hover:text-navy">
+      <Link href={admin ? matchupsPath : "/matches"} className="text-sm text-navy/50 hover:text-navy">
         ← Matchups
       </Link>
 

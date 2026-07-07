@@ -79,7 +79,7 @@ event_results(year UNIQUE, event_id?, winner, final_score, location, captains, r
 
 ## Navigation
 
-Bottom tabs: **Home · Live · Matchups · Menu** (Menu highlights for /players, /history, /courses, /admin). Menu = clubhouse pages for all + "Commissioner Tools" for admins. `/admin` redirects to `/menu`; admin tools keep `/admin/...` URLs. Day tabs on Live + Matchups group rounds by `rounds.played_at` (set dates on rounds!).
+Bottom tabs: **Home · Matches · Bets · Menu** (Menu highlights for /players, /history, /courses, /admin). /matches merges the old Live scoreboard + Matchups pairing sheet (phase-aware cards: tee time → captain lineup pickers → live standing → final); /live and /matchups redirect there; match pages stay at /live/match/[id]. Menu = clubhouse pages for all + "Commissioner Tools" for admins. `/admin` redirects to `/menu`; admin tools keep `/admin/...` URLs. Day tabs on Live + Matchups group rounds by `rounds.played_at` (set dates on rounds!).
 
 ## Scoring model (differs from original plan)
 

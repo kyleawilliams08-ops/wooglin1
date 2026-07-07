@@ -37,8 +37,8 @@ export default async function LiveMatchPage({
         <MatchScorecard
           matchupId={params.matchupId}
           currentPath={currentPath}
-          backHref="/live"
-          backLabel="Live Scoreboard"
+          backHref="/matches"
+          backLabel="Matches"
           viewer={player}
           reviewing={searchParams.review === "1"}
           defaultHcpOpen={false}
@@ -68,7 +68,7 @@ export default async function LiveMatchPage({
     id: string; round_id: string; match_number: number;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
-  if (!matchup) redirect("/live");
+  if (!matchup) redirect("/matches");
 
   const { data: roundRaw } = await supabase
     .from("rounds")
@@ -79,7 +79,7 @@ export default async function LiveMatchPage({
     id: string; event_id: string; side: string; course_tee_id: string;
     formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
   } | null;
-  if (!round?.formats) redirect("/live");
+  if (!round?.formats) redirect("/matches");
 
   const fmt = round.formats!;
   const nineHole = round.side !== "full";
@@ -198,7 +198,7 @@ export default async function LiveMatchPage({
     await upsertSingleScore(sb, matchupId, holeNumber, slot, value);
     await recordScoreFeed(sb, matchupId); // best-effort, never throws
     revalidatePath(currentPath);
-    revalidatePath("/live");
+    revalidatePath("/matches");
   }
 
   return (
@@ -216,7 +216,7 @@ export default async function LiveMatchPage({
         awayColor={awayTeam?.color ?? null}
         cardHref={`${currentPath}?view=card`}
         reviewHref={`${currentPath}?view=card&review=1`}
-        backHref="/live"
+        backHref="/matches"
         saveScore={saveScore}
       />
     </>

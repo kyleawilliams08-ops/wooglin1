@@ -195,7 +195,7 @@ export async function MatchScorecard({
     await upsertHoleScores(sb, matchupId, formData);
     await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
-    revalidatePath("/live");
+    revalidatePath("/matches");
   }
 
   // Save progress, then go to the dedicated review screen.
@@ -206,7 +206,7 @@ export async function MatchScorecard({
     await upsertHoleScores(sb, matchupId, formData);
     await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
-    revalidatePath("/live");
+    revalidatePath("/matches");
     redirect(reviewHref ?? `${currentPath}?review=1`);
   }
 
@@ -224,7 +224,7 @@ export async function MatchScorecard({
     }).eq("id", matchupId);
     await recordMatchFinal(supabase, matchupId, result, score); // best-effort
     revalidatePath(backHref);
-    revalidatePath("/live");
+    revalidatePath("/matches");
     redirect(backHref);
   }
 
