@@ -177,7 +177,7 @@ export default async function EditMatchupPage({
               style={{ backgroundColor: homeTeam?.color ?? "#ccc" }} />
             {homeTeam?.name ?? "Home"}
           </p>
-          <select name="home_p1" required={canHome} disabled={!canHome}
+          <select name="home_p1" disabled={!canHome}
             className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
             defaultValue={matchup.home_p1?.id ?? ""}>
             <option value="">Select player…</option>
@@ -204,7 +204,7 @@ export default async function EditMatchupPage({
               style={{ backgroundColor: awayTeam?.color ?? "#ccc" }} />
             {awayTeam?.name ?? "Away"}
           </p>
-          <select name="away_p1" required={canAway} disabled={!canAway}
+          <select name="away_p1" disabled={!canAway}
             className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50"
             defaultValue={matchup.away_p1?.id ?? ""}>
             <option value="">Select player…</option>

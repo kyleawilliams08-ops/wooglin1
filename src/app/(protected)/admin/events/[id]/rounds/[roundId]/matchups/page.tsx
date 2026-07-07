@@ -282,9 +282,9 @@ export default async function MatchupsPage({
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: homeTeam?.color ?? "#ccc" }} />
               {homeTeam?.name ?? "Home"}
             </p>
-            <select name="home_p1" required
+            <select name="home_p1"
               className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
-              <option value="">Select player…</option>
+              <option value="">Player (optional — captains can fill in)</option>
               {availableHome.map((p) => (
                 <option key={p.id} value={p.id}>{p.display_name}</option>
               ))}
@@ -306,9 +306,9 @@ export default async function MatchupsPage({
               <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: awayTeam?.color ?? "#ccc" }} />
               {awayTeam?.name ?? "Away"}
             </p>
-            <select name="away_p1" required
+            <select name="away_p1"
               className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
-              <option value="">Select player…</option>
+              <option value="">Player (optional — captains can fill in)</option>
               {availableAway.map((p) => (
                 <option key={p.id} value={p.id}>{p.display_name}</option>
               ))}
