@@ -15,7 +15,6 @@ export default async function MenuPage() {
   const commissioner = [
     { href: "/admin/events",  label: "Events",         desc: "Events, teams, rosters, rounds & matchups" },
     { href: "/admin/alerts",  label: "Admin Alerts",   desc: "Full-screen notices everyone must acknowledge" },
-    { href: "/admin/draft",   label: "Draft Setup",    desc: "Schedule the draft, first pick & pick clock" },
     { href: "/admin/players", label: "Player Roster",  desc: "Players, emails & handicap indexes" },
     { href: "/admin/courses", label: "Manage Courses", desc: "Course, tee & hole setup" },
     { href: "/admin/formats", label: "Formats",        desc: "Handicap allowances per format" },

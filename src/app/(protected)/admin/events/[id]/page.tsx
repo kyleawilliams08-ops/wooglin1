@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
+import { recordDraftEvent } from "@/lib/feed";
 
 export default async function EventDetailPage({
   params,
@@ -119,6 +120,15 @@ export default async function EventDetailPage({
     return acc;
   }, {});
 
+  // The event's draft (one per event). Pool = non-captains with no team yet.
+  const { data: draftRows } = await supabase
+    .from("drafts").select("*").eq("event_id", params.id).limit(1);
+  const draft = draftRows?.[0] ?? null;
+  const captainCount = participants.filter((p) => p.is_captain).length;
+  const poolCount = participants.filter((p) => !p.is_captain && !p.team_id).length;
+  const draftReady = sortedTeams.length === 2 && captainCount >= 2 && poolCount > 0;
+  const firstPickTeam = sortedTeams.find((t) => t.id === draft?.first_pick_team_id) ?? sortedTeams[0];
+
   async function updateEvent(formData: FormData) {
     "use server";
     const supabase = createClient();
@@ -211,7 +221,96 @@ export default async function EventDetailPage({
     revalidatePath(`/admin/events/${params.id}`);
   }
 
+  // ---- Draft (one per event; the room itself lives at /draft) ----
+  async function saveDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const id = formData.get("draft_id") as string;
+    const scheduledLocal = formData.get("scheduled_at") as string;
+    const fields = {
+      scheduled_at: scheduledLocal ? new Date(scheduledLocal).toISOString() : null,
+      pick_seconds: parseInt(formData.get("pick_seconds") as string) || 120,
+      call_link: (formData.get("call_link") as string) || null,
+    };
+    const { error } = id
+      ? await supabase.from("drafts").update(fields).eq("id", id)
+      : await supabase.from("drafts").insert({ ...fields, event_id: params.id });
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+    revalidatePath("/");
+  }
+
+  async function setFirstPick(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("drafts")
+      .update({ first_pick_team_id: formData.get("team_id") as string })
+      .eq("id", formData.get("draft_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+  }
+
+  async function startDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const id = formData.get("draft_id") as string;
+    const { error } = await supabase.from("drafts").update({
+      status: "live",
+      current_pick_started_at: new Date().toISOString(),
+    }).eq("id", id);
+    failTo(`/admin/events/${params.id}`, error);
+    await recordDraftEvent(supabase, params.id,
+      `🐉 The ${event.year} draft is LIVE — watch the picks!`);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+    revalidatePath("/");
+    redirect("/draft");
+  }
+
+  async function resetDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const id = formData.get("draft_id") as string;
+    const { data: picks, error: picksError } = await supabase
+      .from("draft_picks").select("participant_id").eq("draft_id", id);
+    failTo(`/admin/events/${params.id}`, picksError);
+    const ids = (picks ?? []).map((p) => p.participant_id);
+    if (ids.length) {
+      // Drafted players go back in the pool; captains keep their teams.
+      const { error } = await supabase.from("event_participants")
+        .update({ team_id: null }).in("id", ids);
+      failTo(`/admin/events/${params.id}`, error);
+    }
+    const { error: delError } = await supabase.from("draft_picks").delete().eq("draft_id", id);
+    failTo(`/admin/events/${params.id}`, delError);
+    const { error: stError } = await supabase.from("drafts")
+      .update({ status: "scheduled", current_pick_started_at: null }).eq("id", id);
+    failTo(`/admin/events/${params.id}`, stError);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+    revalidatePath("/");
+  }
+
+  async function deleteDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("drafts").delete().eq("id", formData.get("draft_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+    revalidatePath("/");
+  }
+
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
+  const draftInputCls = "w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy";
+  const toLocalInput = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
   return (
     <div className="px-4 py-6 space-y-6">
@@ -478,6 +577,139 @@ export default async function EventDetailPage({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Draft */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-navy">Draft</p>
+          {draft && (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+              draft.status === "live" ? "bg-gold text-navy"
+              : draft.status === "complete" ? "bg-europe-green text-white"
+              : "bg-navy/10 text-navy/60"
+            }`}>
+              {draft.status}
+            </span>
+          )}
+        </div>
+
+        {!draft ? (
+          <form action={saveDraft} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
+            <p className="text-sm text-navy/50">
+              Set up a snake draft to fill the rosters. The pool is this event&rsquo;s
+              participants with no team yet; captains must already be on their teams.
+            </p>
+            <label className="block text-xs text-navy/50">
+              Draft day &amp; time
+              <input name="scheduled_at" type="datetime-local" className={`${draftInputCls} mt-1`} />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-xs text-navy/50">
+                Pick clock (seconds, soft)
+                <input name="pick_seconds" type="number" min={15} defaultValue={120} className={`${draftInputCls} mt-1`} />
+              </label>
+              <label className="block text-xs text-navy/50">
+                Call link (FaceTime/Zoom)
+                <input name="call_link" type="url" placeholder="https://…" className={`${draftInputCls} mt-1`} />
+              </label>
+            </div>
+            <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+              Create Draft
+            </button>
+          </form>
+        ) : (
+          <div className="rounded-xl border border-hairline bg-white p-4 space-y-4">
+            {/* settings */}
+            <form action={saveDraft} className="space-y-3">
+              <input type="hidden" name="draft_id" value={draft.id} />
+              <label className="block text-xs text-navy/50">
+                Draft day &amp; time
+                <input name="scheduled_at" type="datetime-local"
+                  defaultValue={toLocalInput(draft.scheduled_at)} className={`${draftInputCls} mt-1`} />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-navy/50">
+                  Pick clock (seconds, soft)
+                  <input name="pick_seconds" type="number" min={15}
+                    defaultValue={draft.pick_seconds} className={`${draftInputCls} mt-1`} />
+                </label>
+                <label className="block text-xs text-navy/50">
+                  Call link (FaceTime/Zoom)
+                  <input name="call_link" type="url" placeholder="https://…"
+                    defaultValue={draft.call_link ?? ""} className={`${draftInputCls} mt-1`} />
+                </label>
+              </div>
+              <button type="submit" className="w-full rounded-lg bg-navy/90 py-2 text-sm font-semibold text-off-white">
+                Save Draft Settings
+              </button>
+            </form>
+
+            {/* first pick */}
+            {draft.status === "scheduled" && sortedTeams.length === 2 && (
+              <div className="flex items-center gap-2 border-t border-hairline pt-3">
+                <p className="text-xs text-navy/50">First pick:</p>
+                {sortedTeams.map((t) => (
+                  <form key={t.id} action={setFirstPick}>
+                    <input type="hidden" name="draft_id" value={draft.id} />
+                    <input type="hidden" name="team_id" value={t.id} />
+                    <button type="submit"
+                      className={`rounded-full px-3 py-1 text-xs font-bold text-white ${
+                        firstPickTeam?.id === t.id ? "" : "opacity-35"
+                      }`}
+                      style={{ backgroundColor: t.color }}>
+                      {t.name}{firstPickTeam?.id === t.id ? " ✓" : ""}
+                    </button>
+                  </form>
+                ))}
+              </div>
+            )}
+
+            {/* readiness / start */}
+            {draft.status === "scheduled" && !draftReady && (
+              <p className="rounded-lg bg-gold/15 px-3 py-2 text-xs text-navy/70">
+                Before starting: 2 teams ({sortedTeams.length}), captains on both
+                ({captainCount}), and undrafted players in the pool ({poolCount}).
+              </p>
+            )}
+
+            <div className="flex items-center gap-3 border-t border-hairline pt-3">
+              {draft.status === "scheduled" && draftReady && (
+                <form action={startDraft} className="flex-1">
+                  <input type="hidden" name="draft_id" value={draft.id} />
+                  <button type="submit"
+                    className="w-full rounded-lg bg-europe-green py-2 text-sm font-bold text-white">
+                    🐉 Start the Draft
+                  </button>
+                </form>
+              )}
+              {draft.status !== "scheduled" && (
+                <>
+                  <Link href="/draft"
+                    className="flex-1 rounded-lg bg-navy py-2 text-center text-sm font-semibold text-off-white">
+                    Open Draft Room
+                  </Link>
+                  <DeleteButton
+                    action={resetDraft}
+                    fields={{ draft_id: draft.id }}
+                    confirm="Reset the draft? All picks are erased and drafted players go back into the pool (captains keep their teams)."
+                    label="Reset"
+                    className="rounded-lg border border-usa-red/40 px-3 py-2 text-sm font-semibold text-usa-red"
+                  />
+                </>
+              )}
+              {draft.status === "scheduled" && (
+                <DeleteButton
+                  action={deleteDraft}
+                  fields={{ draft_id: draft.id }}
+                  confirm="Delete this draft? Any team assignments already made stay on the rosters."
+                  label="Delete"
+                  className="text-sm text-usa-red hover:underline"
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Delete event */}

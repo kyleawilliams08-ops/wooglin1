@@ -33,7 +33,7 @@ export default async function DraftPage({
             No draft on the books yet. The commissioner sets one up before draft day.
           </p>
           {isAdmin(player) && (
-            <Link href="/admin/draft" className="mt-3 inline-block rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-off-white">
+            <Link href="/admin/events" className="mt-3 inline-block rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-off-white">
               Set up the draft →
             </Link>
           )}
@@ -156,7 +156,7 @@ export default async function DraftPage({
             {event.year} Draft
           </h1>
           {isAdmin(player) && (
-            <Link href="/admin/draft" className="text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
+            <Link href={`/admin/events/${event.id}`} className="text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
               Draft setup
             </Link>
           )}
