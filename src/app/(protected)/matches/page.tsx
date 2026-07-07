@@ -1,12 +1,9 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
-import { recordLineup } from "@/lib/feed";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
 
@@ -154,15 +151,6 @@ export default async function MatchesPage({
     (scoresByMatchup[s.matchup_id] ??= {})[s.hole_number] = s;
   }
 
-  // Team rosters for the lineup pickers
-  const { data: participants } = await supabase
-    .from("event_participants")
-    .select("id, display_name, team_id")
-    .eq("event_id", eventId)
-    .order("display_name");
-  const rosterFor = (teamId: string | undefined) =>
-    (participants ?? []).filter((p) => p.team_id === teamId);
-
   // ── Per-matchup live state ─────────────────────────────────────────────────
 
   type MatchState = {
@@ -251,65 +239,12 @@ export default async function MatchesPage({
     if (existing) existing.rounds.push(r);
     else days.push({ key, label, rounds: [r] });
   }
-  const selectedDay = days.find((d) => d.key === searchParams.day) ?? days[0];
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // YYYY-MM-DD
+  const selectedDay =
+    days.find((d) => d.key === searchParams.day) ??
+    days.find((d) => d.key === today) ??
+    days[0];
 
-  // ── Server action: captains/admins set a side's lineup ──────────────────
-
-  async function setLineup(formData: FormData) {
-    "use server";
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) redirect("/login");
-    const matchupId = formData.get("matchup_id") as string;
-    const side = formData.get("side") as "home" | "away";
-
-    const { data: me } = await supabase
-      .from("players").select("id, role").eq("auth_user_id", user.id).single();
-    if (!me) redirect("/login");
-    const meAdmin = me.role === "admin" || me.role === "assistant";
-    if (!meAdmin) {
-      const { data: cap } = await supabase
-        .from("event_participants")
-        .select("team_id")
-        .eq("event_id", eventId)
-        .eq("player_id", me.id)
-        .eq("is_captain", true)
-        .maybeSingle();
-      const sideTeamId = side === "home" ? homeTeam?.id : awayTeam?.id;
-      if (!cap || cap.team_id !== sideTeamId) throw new Error("Not your lineup to set");
-
-      const { data: existing } = await supabase
-        .from("hole_scores")
-        .select("home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross")
-        .eq("matchup_id", matchupId);
-      const hasScores = (existing ?? []).some(
-        (r) => r.home_p1_gross != null || r.home_p2_gross != null || r.away_p1_gross != null || r.away_p2_gross != null,
-      );
-      if (hasScores) throw new Error("Lineup is locked — this match is underway");
-    }
-
-    const p1 = (formData.get("p1") as string) || null;
-    let p2 = (formData.get("p2") as string) || null;
-
-    const { data: mrow } = await supabase
-      .from("matchups")
-      .select("rounds(formats(name))")
-      .eq("id", matchupId)
-      .single();
-    const fmtName = (mrow as unknown as { rounds: { formats: { name: string } | null } | null } | null)
-      ?.rounds?.formats?.name;
-    if (fmtName === "Singles" || (p2 !== null && p2 === p1)) p2 = null;
-
-    const update = side === "home"
-      ? { home_p1_id: p1, home_p2_id: p2 }
-      : { away_p1_id: p1, away_p2_id: p2 };
-    const { error } = await supabase.from("matchups").update(update).eq("id", matchupId);
-    if (error) throw new Error(`Couldn't save lineup: ${error.message}`);
-    await recordLineup(supabase, matchupId, side); // best-effort feed entry
-    revalidatePath("/matches");
-  }
-
-  const selectCls = "w-full rounded-lg border border-hairline bg-white px-2 py-1.5 text-sm text-navy";
   const names = (a: EPRef, b: EPRef) =>
     [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
 
@@ -373,19 +308,6 @@ export default async function MatchesPage({
         {selectedDay?.rounds.map((round) => {
           const ms = matchups.filter((m) => m.round_id === round.id);
           const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
-          const isSingles = round.formats?.name === "Singles";
-
-          const usedElsewhere = (excludeId: string) => {
-            const used = new Set<string>();
-            for (const m of ms) {
-              if (m.id === excludeId) continue;
-              for (const id of [m.home_p1_id, m.home_p2_id, m.away_p1_id, m.away_p2_id]) {
-                if (id) used.add(id);
-              }
-            }
-            return used;
-          };
-
           return (
             <div key={round.id} className="space-y-2">
               <div className="flex items-center justify-between">
@@ -409,54 +331,8 @@ export default async function MatchesPage({
               ) : (
                 ms.map((m) => {
                   const st = stateById[m.id];
-                  const used = usedElsewhere(m.id);
                   const locked = st.final || st.underway;
-                  const lineupIncomplete =
-                    (canEditHome && !m.home_p1_id) || (canEditAway && !m.away_p1_id);
                   const canEditAny = (canEditHome || canEditAway) && !locked;
-
-                  const sideBlock = (
-                    side: "home" | "away",
-                    team: typeof homeTeam,
-                    p1: EPRef, p2: EPRef,
-                    editable: boolean,
-                  ) => {
-                    const roster = rosterFor(team?.id).filter(
-                      (p) => !used.has(p.id) || p.id === p1?.id || p.id === p2?.id,
-                    );
-                    return (
-                      <div className="flex-1 min-w-0 rounded-lg p-2.5" style={{ backgroundColor: `${team?.color ?? "#0C2D55"}12` }}>
-                        <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: team?.color ?? "#0C2D55" }}>
-                          {team?.name ?? side}
-                        </p>
-                        {editable ? (
-                          <form action={setLineup} className="space-y-1.5">
-                            <input type="hidden" name="matchup_id" value={m.id} />
-                            <input type="hidden" name="side" value={side} />
-                            <select name="p1" defaultValue={p1?.id ?? ""} className={selectCls}>
-                              <option value="">{isSingles ? "Player…" : "Player 1…"}</option>
-                              {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-                            </select>
-                            {!isSingles && (
-                              <select name="p2" defaultValue={p2?.id ?? ""} className={selectCls}>
-                                <option value="">Player 2 (blank for 2v1)</option>
-                                {roster.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-                              </select>
-                            )}
-                            <button type="submit"
-                              className="w-full rounded-lg py-1.5 text-xs font-semibold text-white"
-                              style={{ backgroundColor: team?.color ?? "#0C2D55" }}>
-                              Save lineup
-                            </button>
-                          </form>
-                        ) : (
-                          <p className="text-sm font-semibold text-navy leading-snug">
-                            {[p1?.display_name, p2?.display_name].filter(Boolean).join(" / ") || <span className="text-navy/30">TBD</span>}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  };
 
                   return (
                     <div key={m.id} className="rounded-xl border border-hairline bg-white p-3 space-y-2">
@@ -498,18 +374,32 @@ export default async function MatchesPage({
                         </p>
                       </Link>
 
-                      {/* Lineup pickers: open when something's missing, tucked away otherwise */}
+                      {/* Lineup buttons → full-page picker */}
                       {canEditAny && (
-                        <details open={lineupIncomplete} className="group border-t border-hairline pt-2">
-                          <summary className="cursor-pointer select-none list-none text-xs font-semibold text-navy/50 [&::-webkit-details-marker]:hidden">
-                            {lineupIncomplete ? "⚡ Set lineup" : "Change lineup"} <span className="inline-block transition-transform group-open:rotate-90">›</span>
-                          </summary>
-                          <div className="mt-2 flex gap-2.5 items-stretch">
-                            {sideBlock("home", homeTeam, m.home_p1, m.home_p2, canEditHome)}
-                            <span className="self-center text-xs font-bold text-navy/30">VS</span>
-                            {sideBlock("away", awayTeam, m.away_p1, m.away_p2, canEditAway)}
-                          </div>
-                        </details>
+                        <div className="flex gap-2 border-t border-hairline pt-2">
+                          {canEditHome && (
+                            <Link
+                              href={`/matches/lineup/${m.id}?side=home`}
+                              className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
+                                m.home_p1_id ? "border border-hairline text-navy/60" : "text-white"
+                              }`}
+                              style={m.home_p1_id ? undefined : { backgroundColor: homeTeam?.color ?? "#0C2D55" }}
+                            >
+                              {m.home_p1_id ? `Change ${homeLabel}` : `⚡ Set ${homeLabel} lineup`}
+                            </Link>
+                          )}
+                          {canEditAway && (
+                            <Link
+                              href={`/matches/lineup/${m.id}?side=away`}
+                              className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
+                                m.away_p1_id ? "border border-hairline text-navy/60" : "text-white"
+                              }`}
+                              style={m.away_p1_id ? undefined : { backgroundColor: awayTeam?.color ?? "#0C2D55" }}
+                            >
+                              {m.away_p1_id ? `Change ${awayLabel}` : `⚡ Set ${awayLabel} lineup`}
+                            </Link>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
