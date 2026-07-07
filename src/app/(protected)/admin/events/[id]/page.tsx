@@ -129,6 +129,14 @@ export default async function EventDetailPage({
   const draftReady = sortedTeams.length === 2 && captainCount >= 2 && poolCount > 0;
   const firstPickTeam = sortedTeams.find((t) => t.id === draft?.first_pick_team_id) ?? sortedTeams[0];
 
+  // Players not yet in this event — candidates to drop into the draft pool
+  const { data: allPlayers } = await supabase
+    .from("players").select("id, name, nickname, current_index").order("name");
+  const participantPlayerIds = new Set(
+    participants.map((p) => p.players?.id).filter(Boolean),
+  );
+  const availablePlayers = (allPlayers ?? []).filter((p) => !participantPlayerIds.has(p.id));
+
   async function updateEvent(formData: FormData) {
     "use server";
     const supabase = createClient();
@@ -219,6 +227,34 @@ export default async function EventDetailPage({
     const { error } = await supabase.from("rounds").delete().eq("id", formData.get("round_id") as string);
     failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
+  }
+
+  // Add a player to the event with no team — the draft pool. (Captains and
+  // pre-assigned players still go on via the team roster pages.)
+  async function addToPool(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const playerId = formData.get("player_id") as string;
+    const { data: p } = await supabase.from("players").select("nickname, name").eq("id", playerId).single();
+    const { error } = await supabase.from("event_participants").insert({
+      event_id:     params.id,
+      player_id:    playerId,
+      team_id:      null,
+      display_name: p?.nickname ?? p?.name ?? "",
+      is_captain:   false,
+    });
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+  }
+
+  async function removeParticipant(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("event_participants").delete().eq("id", formData.get("ep_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
   }
 
   // ---- Draft (one per event; the room itself lives at /draft) ----
@@ -554,29 +590,72 @@ export default async function EventDetailPage({
       {/* Participants */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Participants · {participants.length}</p>
+        <p className="text-sm text-navy/50 -mt-1">
+          Add draft-pool players here (no team — they&rsquo;ll be drafted). Captains
+          and pre-set players go on via the team rosters above.
+        </p>
         {participants.length === 0 && (
-          <p className="text-sm text-navy/40">No participants yet. Add players via team rosters above.</p>
+          <p className="text-sm text-navy/40">No participants yet.</p>
         )}
-        <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline">
-          {participants.map((ep) => (
-            <div key={ep.id} className="flex items-center justify-between px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                {ep.teams && (
-                  <span
-                    className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: ep.teams.color }}
-                  />
-                )}
-                <span className="text-sm font-medium text-navy">{ep.display_name}</span>
-                {ep.is_captain && <span className="text-xs text-navy/40">C</span>}
+        {participants.length > 0 && (
+          <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline">
+            {participants.map((ep) => (
+              <div key={ep.id} className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  {ep.teams ? (
+                    <span
+                      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: ep.teams.color }}
+                    />
+                  ) : (
+                    <span className="inline-block w-2 h-2 rounded-full flex-shrink-0 border border-navy/30" />
+                  )}
+                  <span className="text-sm font-medium text-navy">{ep.display_name}</span>
+                  {ep.is_captain && <span className="text-xs text-navy/40">C</span>}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-navy/40">
+                  {ep.teams ? (
+                    <span>{ep.teams.name}</span>
+                  ) : (
+                    <span className="rounded-full bg-navy/10 px-2 py-0.5 font-semibold text-navy/60">Pool</span>
+                  )}
+                  <span>idx {ep.players?.current_index ?? "—"}</span>
+                  {/* Only pool players are removable here; team members via rosters */}
+                  {!ep.team_id && (
+                    <DeleteButton
+                      action={removeParticipant}
+                      fields={{ ep_id: ep.id }}
+                      confirm={`Remove ${ep.display_name} from the draft pool?`}
+                      label="Remove"
+                      className="text-xs text-usa-red hover:underline"
+                    />
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-navy/40">
-                {ep.teams && <span>{ep.teams.name}</span>}
-                <span>idx {ep.players?.current_index ?? "—"}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add to draft pool */}
+        {availablePlayers.length > 0 ? (
+          <form action={addToPool} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
+            <p className="font-semibold text-navy text-sm">Add to Draft Pool</p>
+            <select name="player_id" required
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+              <option value="">Select player…</option>
+              {availablePlayers.map((ap) => (
+                <option key={ap.id} value={ap.id}>
+                  {ap.name}{ap.nickname ? ` (${ap.nickname})` : ""} · {ap.current_index ?? "no index"}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+              Add to Pool
+            </button>
+          </form>
+        ) : (
+          <p className="text-sm text-navy/40">Every player is already in this event.</p>
+        )}
       </div>
 
       {/* Draft */}
