@@ -245,6 +245,7 @@ export default async function MatchesPage({
     days.find((d) => d.key === searchParams.day) ??
     days.find((d) => d.key === today) ??
     days[0];
+  const dayQ = selectedDay ? `&day=${encodeURIComponent(selectedDay.key)}` : "";
 
   const names = (a: EPRef, b: EPRef) =>
     [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
@@ -337,9 +338,6 @@ export default async function MatchesPage({
 
                   return (
                     <div key={m.id} className="relative rounded-xl border border-hairline bg-white p-3 space-y-2 transition-colors hover:border-navy/30">
-                      {/* Whole card opens the match; interactive bits sit above the overlay */}
-                      <Link href={`/live/match/${m.id}`} className="absolute inset-0" aria-label={`Open Match ${m.match_number}`} />
-
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-bold text-navy shrink-0">Match {m.match_number}</p>
                         <div className="flex items-center gap-1 min-w-0">
@@ -373,7 +371,7 @@ export default async function MatchesPage({
                         <div className="relative z-10 flex gap-2 border-t border-hairline pt-2">
                           {canEditHome && (
                             <Link
-                              href={`/matches/lineup/${m.id}?side=home`}
+                              href={`/matches/lineup/${m.id}?side=home${dayQ}`}
                               className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
                                 m.home_p1_id ? "border border-hairline text-navy/60" : "text-white"
                               }`}
@@ -384,7 +382,7 @@ export default async function MatchesPage({
                           )}
                           {canEditAway && (
                             <Link
-                              href={`/matches/lineup/${m.id}?side=away`}
+                              href={`/matches/lineup/${m.id}?side=away${dayQ}`}
                               className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
                                 m.away_p1_id ? "border border-hairline text-navy/60" : "text-white"
                               }`}
@@ -395,6 +393,9 @@ export default async function MatchesPage({
                           )}
                         </div>
                       )}
+
+                      {/* Whole card opens the match; placed last so space-y doesn't add a phantom gap */}
+                      <Link href={`/live/match/${m.id}`} className="absolute inset-0 !mt-0" aria-label={`Open Match ${m.match_number}`} />
                     </div>
                   );
                 })

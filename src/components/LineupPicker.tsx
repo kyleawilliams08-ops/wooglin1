@@ -25,6 +25,7 @@ export function LineupPicker({
   teamName,
   teamColor,
   action,
+  cancelHref = "/matches",
 }: {
   players: LineupPlayer[];
   max: 1 | 2;
@@ -32,6 +33,7 @@ export function LineupPicker({
   teamName: string;
   teamColor: string;
   action: (formData: FormData) => Promise<void>;
+  cancelHref?: string;
 }) {
   const [sel, setSel] = useState<string[]>(initial.slice(0, max));
   const [q, setQ] = useState("");
@@ -113,7 +115,7 @@ export function LineupPicker({
       {max === 2 && sel.length === 1 && (
         <p className="text-center text-[11px] text-navy/40">One player = playing 2v1. Tap a second for a pair.</p>
       )}
-      <Link href="/matches" className="block text-center text-sm text-navy/50 hover:text-navy">
+      <Link href={cancelHref} className="block text-center text-sm text-navy/50 hover:text-navy">
         Cancel
       </Link>
     </div>

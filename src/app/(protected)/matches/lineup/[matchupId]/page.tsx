@@ -13,11 +13,12 @@ export default async function LineupPage({
   searchParams,
 }: {
   params: { matchupId: string };
-  searchParams: { side?: string };
+  searchParams: { side?: string; day?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
   const side = searchParams.side === "away" ? "away" : "home";
+  const backHref = searchParams.day ? `/matches?day=${encodeURIComponent(searchParams.day)}` : "/matches";
   const supabase = createClient();
 
   const { data: matchupRaw } = await supabase
@@ -103,6 +104,7 @@ export default async function LineupPage({
   const matchupId = params.matchupId;
   const eventId = round.event_id;
   const teamId = team.id;
+  const returnTo = backHref;
 
   async function saveLineup(formData: FormData) {
     "use server";
@@ -145,13 +147,13 @@ export default async function LineupPage({
     if (error) throw new Error(`Couldn't save lineup: ${error.message}`);
     await recordLineup(supabase, matchupId, side); // best-effort feed entry
     revalidatePath("/matches");
-    redirect("/matches");
+    redirect(returnTo);
   }
 
   return (
     <div className="px-4 py-5 space-y-4">
       <div className="flex items-center justify-between">
-        <Link href="/matches" className="text-sm text-navy/50 hover:text-navy">← Matches</Link>
+        <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">← Matches</Link>
         {underway && admin && (
           <span className="text-[11px] font-semibold text-usa-red">Match underway — admin override</span>
         )}
@@ -176,6 +178,7 @@ export default async function LineupPage({
         teamName={team.name}
         teamColor={team.color}
         action={saveLineup}
+        cancelHref={backHref}
       />
     </div>
   );
