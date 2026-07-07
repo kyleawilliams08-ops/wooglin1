@@ -2,6 +2,7 @@ import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
+import { CardMenu } from "@/components/CardMenu";
 import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
 
@@ -335,24 +336,13 @@ export default async function MatchesPage({
                   const canEditAny = (canEditHome || canEditAway) && !locked;
 
                   return (
-                    <div key={m.id} className="rounded-xl border border-hairline bg-white p-3 space-y-2">
-                      {/* Header: match number, tee time, status + admin links */}
+                    <div key={m.id} className="relative rounded-xl border border-hairline bg-white p-3 space-y-2 transition-colors hover:border-navy/30">
+                      {/* Whole card opens the match; interactive bits sit above the overlay */}
+                      <Link href={`/live/match/${m.id}`} className="absolute inset-0" aria-label={`Open Match ${m.match_number}`} />
+
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-navy shrink-0">
-                          Match {m.match_number}
-                          {!st.underway && fmtTeeTime(m.tee_time) && (
-                            <span className="font-semibold text-navy/50"> · {fmtTeeTime(m.tee_time)}</span>
-                          )}
-                        </p>
-                        <div className="flex items-center gap-2 min-w-0">
-                          {admin && (
-                            <span className="flex items-center gap-2 text-xs shrink-0">
-                              <Link href={`/admin/events/${eventId}/rounds/${round.id}/matchups/${m.id}`}
-                                className="text-navy/50 underline underline-offset-2">Edit</Link>
-                              <Link href={`/print/match/${m.id}`} target="_blank"
-                                className="text-navy/50 underline underline-offset-2">Print</Link>
-                            </span>
-                          )}
+                        <p className="text-sm font-bold text-navy shrink-0">Match {m.match_number}</p>
+                        <div className="flex items-center gap-1 min-w-0">
                           <span
                             className={`truncate text-xs font-semibold px-2.5 py-1 rounded-full ${st.chipColor ? "" : "border border-hairline"}`}
                             style={st.chipColor
@@ -361,22 +351,26 @@ export default async function MatchesPage({
                           >
                             {st.chip}
                           </span>
+                          {admin && (
+                            <span className="relative z-10 shrink-0">
+                              <CardMenu items={[
+                                { href: `/admin/events/${eventId}/rounds/${round.id}/matchups/${m.id}`, label: "Edit match" },
+                                { href: `/print/match/${m.id}`, label: "Print scorecard", newTab: true },
+                              ]} />
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Pairing line → the match page */}
-                      <Link href={`/live/match/${m.id}`} className="block hover:bg-parchment -mx-1 rounded px-1 transition-colors">
-                        <p className="text-sm font-semibold text-navy truncate">
-                          <span style={{ color: homeTeam?.color ?? undefined }}>{names(m.home_p1, m.home_p2)}</span>
-                          <span className="text-navy/40 font-normal"> vs </span>
-                          <span style={{ color: awayTeam?.color ?? undefined }}>{names(m.away_p1, m.away_p2)}</span>
-                          <span className="text-navy/30 float-right">›</span>
-                        </p>
-                      </Link>
+                      <p className="text-sm font-semibold text-navy truncate">
+                        <span style={{ color: homeTeam?.color ?? undefined }}>{names(m.home_p1, m.home_p2)}</span>
+                        <span className="text-navy/40 font-normal"> vs </span>
+                        <span style={{ color: awayTeam?.color ?? undefined }}>{names(m.away_p1, m.away_p2)}</span>
+                      </p>
 
                       {/* Lineup buttons → full-page picker */}
                       {canEditAny && (
-                        <div className="flex gap-2 border-t border-hairline pt-2">
+                        <div className="relative z-10 flex gap-2 border-t border-hairline pt-2">
                           {canEditHome && (
                             <Link
                               href={`/matches/lineup/${m.id}?side=home`}
