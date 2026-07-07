@@ -61,6 +61,7 @@ hole_scores(matchup_id, hole_number, home_p1_gross, home_p2_gross, away_p1_gross
 participant_handicaps(event_id, player_id, course_tee_id, calculated_hcp, override_hcp)  -- integers
 player_appearances(player_id, year, result[W/L/T])  -- 2014+ backfill, drives Appearances/Cup Record
 event_results(year UNIQUE, event_id?, winner, final_score, location, captains, roster, losing_roster, notes)  -- history archive; event_id links real in-app events (the "real cup lineage")
+admin_alerts(id, title?, message, created_by) / alert_dismissals(alert_id, player_id PK pair)  -- full-screen notices; overlay shows until the player's dismissal row exists
 ```
 
 "home" team = first team by name (Europe before USA). Storage bucket `avatars` (public) for player photos.
@@ -80,6 +81,7 @@ event_results(year UNIQUE, event_id?, winner, final_score, location, captains, r
 - `src/lib/bets.ts` — betting money math + tests. Per-person stakes: every loser pays the stake, pot splits among winners (covers 1v1/2v2/group). Only status 'closed' moves money.
 - `src/components/LineupPicker.tsx` + `/matches/lineup/[id]?side=&day=` — full-page tappable avatar-grid lineup setting (captains own side; locked once underway; Singles max 1; threads ?day= back).
 - `src/components/BetWizard.tsx` (/bets/new), `CardMenu` (ellipsis dropdowns), `FeedFilter` (?kinds= bottom sheet), `ConfirmForm` (confirm-before-submit).
+- `src/components/AlertOverlay.tsx` + `src/lib/alertActions.ts` + `/admin/alerts` — admin alerts: full-screen takeover (mounted in the protected layout) until each player taps OK/✕; realtime-published so open sessions pop instantly; admins create/edit/delete from Menu → Admin Alerts ("seen by X of Y" counts).
 
 ## Clubhouse feed
 

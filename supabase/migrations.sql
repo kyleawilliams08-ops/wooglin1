@@ -1129,3 +1129,48 @@ select cron.schedule(
   '0 5 * * *',
   $$delete from feed_events where created_at < now() - interval '30 days'$$
 );
+
+-- ============================================================
+-- Admin Alerts: full-screen notices every player must acknowledge
+-- ============================================================
+
+create table if not exists admin_alerts (
+  id         uuid primary key default gen_random_uuid(),
+  title      text,
+  message    text not null,
+  created_by uuid references players(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- One row per player per alert; the overlay shows until this row exists.
+create table if not exists alert_dismissals (
+  alert_id     uuid not null references admin_alerts(id) on delete cascade,
+  player_id    uuid not null references players(id) on delete cascade,
+  dismissed_at timestamptz not null default now(),
+  primary key (alert_id, player_id)
+);
+
+alter table admin_alerts enable row level security;
+alter table alert_dismissals enable row level security;
+drop policy if exists "authenticated users can read alerts" on admin_alerts;
+drop policy if exists "authenticated users can write alerts" on admin_alerts;
+drop policy if exists "authenticated users can read alert dismissals" on alert_dismissals;
+drop policy if exists "authenticated users can write alert dismissals" on alert_dismissals;
+create policy "authenticated users can read alerts"
+  on admin_alerts for select to authenticated using (true);
+-- Create/edit/delete is admin-only, enforced by the page gate + in-action
+-- re-check (friends-app trust model, consistent with bets/feed).
+create policy "authenticated users can write alerts"
+  on admin_alerts for all to authenticated using (true) with check (true);
+create policy "authenticated users can read alert dismissals"
+  on alert_dismissals for select to authenticated using (true);
+create policy "authenticated users can write alert dismissals"
+  on alert_dismissals for all to authenticated using (true) with check (true);
+
+-- Realtime so open sessions pop the alert without a manual refresh
+do $$
+begin
+  alter publication supabase_realtime add table admin_alerts;
+exception when duplicate_object then null;
+end $$;
