@@ -7,7 +7,6 @@ export default async function MenuPage() {
 
   const clubhouse = [
     { href: "/players", label: "Player Cards", desc: "Appearances, records & profiles" },
-    { href: "/bets",    label: "Betting",      desc: "Side bets & the year's ledger" },
     { href: "/history", label: "History",      desc: "Past cups and champions" },
     { href: "/courses", label: "Courses",      desc: "Courses, tees & ratings" },
   ];
