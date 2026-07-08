@@ -7,6 +7,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { FeedList, type FeedItem } from "@/components/FeedList";
 import { FeedFilter } from "@/components/FeedFilter";
+import { LocalDate } from "@/components/LocalDate";
 import { ledgerNets, fmtNet } from "@/lib/bets";
 
 // One quip per page load — clubhouse locker-room energy, kept clean.
@@ -140,11 +141,14 @@ export default async function Home({
                 Draft Day
               </p>
               <p className="text-lg font-display font-bold text-navy">
-                {draft.scheduled_at
-                  ? new Date(draft.scheduled_at).toLocaleDateString("en-US", {
-                      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
-                    })
-                  : `The ${draftYear ?? ""} draft is coming`}
+                {draft.scheduled_at ? (
+                  <LocalDate
+                    iso={draft.scheduled_at}
+                    options={{ weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }}
+                  />
+                ) : (
+                  `The ${draftYear ?? ""} draft is coming`
+                )}
               </p>
               <p className="mt-1 text-sm text-navy/60">Rosters are on the line — see the pool →</p>
             </>
