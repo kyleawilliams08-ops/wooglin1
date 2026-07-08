@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { CardMenu } from "@/components/CardMenu";
+import { StartLineupDraftButton } from "@/components/StartLineupDraftButton";
 import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
 
@@ -94,16 +95,16 @@ export default async function MatchesPage({
     course_tees: { tee_name: string; courses: { name: string } | null } | null;
   }[];
 
-  // A live lineup draft (nightly pairing ceremony) to promote at the top
-  const { data: liveDrafts } = rounds.length > 0
+  // Lineup drafts (nightly pairing ceremony) — per round, for the top banner
+  // and the per-round start/enter controls.
+  const { data: allLineupDrafts } = rounds.length > 0
     ? await supabase
         .from("lineup_drafts")
         .select("round_id, status")
         .in("round_id", rounds.map((r) => r.id))
-        .eq("status", "live")
-        .limit(1)
     : { data: [] as { round_id: string; status: string }[] };
-  const liveDraft = liveDrafts?.[0] ?? null;
+  const lineupDraftByRound = new Map((allLineupDrafts ?? []).map((d) => [d.round_id, d.status]));
+  const liveDraft = (allLineupDrafts ?? []).find((d) => d.status === "live") ?? null;
   const liveDraftRound = liveDraft ? rounds.find((r) => r.id === liveDraft.round_id) ?? null : null;
 
   const { data: matchupsRaw } = rounds.length > 0
@@ -359,6 +360,33 @@ export default async function MatchesPage({
                   </Link>
                 )}
               </div>
+
+              {/* Lineup draft: enter it when live (everyone), or start it (admin) */}
+              {(() => {
+                const draftStatus = lineupDraftByRound.get(round.id);
+                const roundUnderway = ms.some((m) => stateById[m.id]?.underway || stateById[m.id]?.final);
+                if (draftStatus === "live") {
+                  return (
+                    <Link
+                      href={`/matches/lineup-draft/${round.id}`}
+                      className="flex items-center justify-between rounded-xl bg-navy px-4 py-2.5 ring-2 ring-gold"
+                    >
+                      <span className="font-display text-sm font-bold text-off-white">🥊 Lineup draft is LIVE</span>
+                      <span className="text-xs font-semibold text-gold">Enter →</span>
+                    </Link>
+                  );
+                }
+                if (admin && ms.length > 0 && !roundUnderway && homeTeam && awayTeam) {
+                  return (
+                    <StartLineupDraftButton
+                      roundId={round.id}
+                      homeTeam={{ id: homeTeam.id, name: homeTeam.name, color: homeTeam.color }}
+                      awayTeam={{ id: awayTeam.id, name: awayTeam.name, color: awayTeam.color }}
+                    />
+                  );
+                }
+                return null;
+              })()}
 
               {ms.length === 0 ? (
                 <p className="text-xs text-navy/40">

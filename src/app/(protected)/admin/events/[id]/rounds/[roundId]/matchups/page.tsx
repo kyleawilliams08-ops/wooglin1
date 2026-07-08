@@ -6,7 +6,7 @@ import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
-import { recordLineupDraftEvent } from "@/lib/feed";
+import { startLineupDraft } from "@/lib/lineupDraftActions";
 
 export default async function MatchupsPage({
   params,
@@ -139,51 +139,10 @@ export default async function MatchupsPage({
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
-  async function startLineupDraft(formData: FormData) {
+  async function startLineupDraftAction(formData: FormData) {
     "use server";
-    const supabase = createClient();
-    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
-    const { data: ms } = await supabase
-      .from("matchups").select("id, status").eq("round_id", params.roundId);
-    if (!ms || ms.length === 0) failTo(path, { message: "Add matchups for this round first." });
-    if ((ms ?? []).some((m) => m.status !== "pending")) {
-      failTo(path, { message: "This round is already underway — can't draft lineups now." });
-    }
-    // Blank slate: clear all sides so the draft fills them fresh.
-    const { error: clearErr } = await supabase.from("matchups").update({
-      home_p1_id: null, home_p2_id: null, away_p1_id: null, away_p2_id: null,
-    }).eq("round_id", params.roundId);
-    failTo(path, clearErr);
-
-    const { data: tm } = await supabase
-      .from("teams").select("id").eq("event_id", params.id).order("name");
-    const defaultFirst = ((formData.get("first_pick") as string) || tm?.[0]?.id) ?? null;
-
-    const { data: existing } = await supabase
-      .from("lineup_drafts").select("id").eq("round_id", params.roundId).maybeSingle();
-    if (existing) {
-      await supabase.from("lineup_draft_picks").delete().eq("draft_id", existing.id);
-      const { error } = await supabase.from("lineup_drafts").update({
-        status: "live",
-        first_pick_team_id: defaultFirst,
-        current_pick_started_at: new Date().toISOString(),
-      }).eq("id", existing.id);
-      failTo(path, error);
-    } else {
-      const { error } = await supabase.from("lineup_drafts").insert({
-        round_id: params.roundId,
-        status: "live",
-        first_pick_team_id: defaultFirst,
-        current_pick_started_at: new Date().toISOString(),
-      });
-      failTo(path, error);
-    }
-
-    const { data: rnd } = await supabase.from("rounds").select("round_number").eq("id", params.roundId).single();
-    await recordLineupDraftEvent(supabase, params.id, `📋 Lineup draft is live — Round ${rnd?.round_number ?? ""}`.trim());
-    revalidatePath(path);
-    revalidatePath(`/matches/lineup-draft/${params.roundId}`);
-    revalidatePath("/matches");
+    const { error } = await startLineupDraft(params.roundId, (formData.get("first_pick") as string) || undefined);
+    failTo(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`, error ? { message: error } : null);
     redirect(`/matches/lineup-draft/${params.roundId}`);
   }
 
@@ -281,7 +240,7 @@ export default async function MatchupsPage({
 
         {!lineupDraft || lineupDraft.status === "scheduled" ? (
           canDraft ? (
-            <form action={startLineupDraft} className="space-y-2">
+            <form action={startLineupDraftAction} className="space-y-2">
               <p className="text-xs text-navy/50">Who picks first?</p>
               <div className="flex gap-2">
                 {[homeTeam, awayTeam].map((t, i) => (

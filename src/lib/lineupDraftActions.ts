@@ -201,6 +201,62 @@ export async function makeLineupPick(
   return { error: null };
 }
 
+/**
+ * Admin-only: start (or restart) a round's lineup draft. Clears the round's
+ * matchup sides to a blank slate, then flips the draft live. Shared by the
+ * round's matchups admin page and the /matches board so the ceremony can be
+ * kicked off from either. Returns an error; the caller handles navigation.
+ */
+export async function startLineupDraft(
+  roundId: string,
+  firstPickTeamId?: string,
+): Promise<{ error: string | null }> {
+  const player = await requirePlayer();
+  if (!isAdmin(player)) return { error: "Only the commissioner can start the draft." };
+  const supabase = createClient();
+
+  const { data: round } = await supabase
+    .from("rounds").select("id, event_id, round_number").eq("id", roundId).single();
+  if (!round) return { error: "Round not found." };
+
+  const { data: ms } = await supabase.from("matchups").select("id, status").eq("round_id", roundId);
+  if (!ms || ms.length === 0) return { error: "Add matchups for this round first." };
+  if (ms.some((m) => m.status !== "pending")) {
+    return { error: "This round is underway — can't draft lineups now." };
+  }
+
+  const { error: clearErr } = await supabase.from("matchups").update({
+    home_p1_id: null, home_p2_id: null, away_p1_id: null, away_p2_id: null,
+  }).eq("round_id", roundId);
+  if (clearErr) return { error: clearErr.message };
+
+  const { data: teams } = await supabase.from("teams").select("id").eq("event_id", round.event_id).order("name");
+  const defaultFirst = firstPickTeamId || teams?.[0]?.id || null;
+
+  const { data: existing } = await supabase
+    .from("lineup_drafts").select("id").eq("round_id", roundId).maybeSingle();
+  if (existing) {
+    await supabase.from("lineup_draft_picks").delete().eq("draft_id", existing.id);
+    const { error } = await supabase.from("lineup_drafts").update({
+      status: "live", first_pick_team_id: defaultFirst, current_pick_started_at: new Date().toISOString(),
+    }).eq("id", existing.id);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase.from("lineup_drafts").insert({
+      round_id: roundId, status: "live", first_pick_team_id: defaultFirst,
+      current_pick_started_at: new Date().toISOString(),
+    });
+    if (error) return { error: error.message };
+  }
+
+  await recordLineupDraftEvent(supabase, round.event_id, `📋 Lineup draft is live — Round ${round.round_number}`);
+  revalidatePath("/matches");
+  revalidatePath(`/matches/lineup-draft/${roundId}`);
+  revalidatePath(`/admin/events/${round.event_id}/rounds/${roundId}/matchups`);
+  revalidatePath("/");
+  return { error: null };
+}
+
 /** Admin-only: take back the most recent pick and clear that matchup side. */
 export async function undoLastLineupPick(draftId: string): Promise<{ error: string | null }> {
   const player = await requirePlayer();
