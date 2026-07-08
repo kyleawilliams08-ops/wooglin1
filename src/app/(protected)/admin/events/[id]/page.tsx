@@ -7,6 +7,7 @@ import { DeleteButton } from "@/components/DeleteButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { recordDraftEvent } from "@/lib/feed";
+import { LocalDateTimeInput } from "@/components/LocalDateTimeInput";
 
 export default async function EventDetailPage({
   params,
@@ -341,12 +342,6 @@ export default async function EventDetailPage({
 
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
   const draftInputCls = "w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy";
-  const toLocalInput = (iso: string | null) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
 
   return (
     <div className="px-4 py-6 space-y-6">
@@ -681,7 +676,7 @@ export default async function EventDetailPage({
             </p>
             <label className="block text-xs text-navy/50">
               Draft day &amp; time
-              <input name="scheduled_at" type="datetime-local" className={`${draftInputCls} mt-1`} />
+              <LocalDateTimeInput name="scheduled_at" iso={null} className={`${draftInputCls} mt-1`} />
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs text-navy/50">
@@ -704,8 +699,7 @@ export default async function EventDetailPage({
               <input type="hidden" name="draft_id" value={draft.id} />
               <label className="block text-xs text-navy/50">
                 Draft day &amp; time
-                <input name="scheduled_at" type="datetime-local"
-                  defaultValue={toLocalInput(draft.scheduled_at)} className={`${draftInputCls} mt-1`} />
+                <LocalDateTimeInput name="scheduled_at" iso={draft.scheduled_at} className={`${draftInputCls} mt-1`} />
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs text-navy/50">
