@@ -64,6 +64,8 @@ event_results(year UNIQUE, event_id?, winner, final_score, location, captains, r
 admin_alerts(id, title?, message, created_by) / alert_dismissals(alert_id, player_id PK pair)  -- full-screen notices; overlay shows until the player's dismissal row exists
 drafts(id, event_id UNIQUE, status[scheduled/live/complete], scheduled_at, first_pick_team_id, pick_seconds, call_link, current_pick_started_at)  -- snake draft; pool = event's non-captain participants with team_id NULL
 draft_picks(draft_id, pick_number, team_id, participant_id, picked_by)  -- unique (draft,pick_number)+(draft,participant); each pick writes event_participants.team_id, so draft completion = rosters set
+lineup_drafts(id, round_id UNIQUE, status[scheduled/live/complete], first_pick_team_id, pick_seconds, current_pick_started_at)  -- optional per-round snake draft that fills a round's matchups
+lineup_draft_picks(draft_id, pick_number, team_id, matchup_id, side[home/away], p1_id, p2_id?, picked_by)  -- each pick writes matchups.{side}_p1/p2, so completion = round lineups set
 ```
 
 "home" team = first team by name (Europe before USA). Storage bucket `avatars` (public) for player photos.
@@ -85,6 +87,7 @@ draft_picks(draft_id, pick_number, team_id, participant_id, picked_by)  -- uniqu
 - `src/components/BetWizard.tsx` (/bets/new), `CardMenu` (ellipsis dropdowns), `FeedFilter` (?kinds= bottom sheet), `ConfirmForm` (confirm-before-submit).
 - `src/components/AlertOverlay.tsx` + `src/lib/alertActions.ts` + `/admin/alerts` — admin alerts: full-screen takeover (mounted in the protected layout) until each player taps OK/✕; realtime-published so open sessions pop instantly; admins create/edit/delete from Menu → Admin Alerts ("seen by X of Y" counts).
 - `src/lib/draft.ts` (pure snake order + soft clock, tested) + `src/lib/draftActions.ts` (makePick/undoLastPick: captain-of-on-clock-team or admin; unique pick_number settles races; pick rollback if roster write fails) + `/draft` (`DraftRoom.tsx`: scheduled/live/complete moods, realtime, pick-reveal animation, ?tv=1 chrome-free casting view). Draft **setup lives inside the event** (Draft section on `/admin/events/[id]`: create, schedule, first-pick toggle, soft pick clock, call link, start/reset/delete — one draft per event) — there is no standalone /admin/draft. Draft pops on Home while scheduled/live; feed kind 'draft' posts live/picks/complete/undo.
+- **Lineup Draft** (nightly pairing ceremony, reuses the snake engine): `src/lib/lineupDraftActions.ts` (makeLineupPick/undoLastLineupPick — captain of on-clock team or admin; snake fills each match's two sides in lead→answer order; a pick writes `matchups.{home|away}_p1/p2`, so completion sets the round's lineups) + `/matches/lineup-draft/[roundId]` (`LineupDraftRoom.tsx`: on-clock banner, soft clock, side-by-side board, roster grid when it's your turn, light "pick is in" reveal). Optional per-round; **started from the round's matchups admin page** (Lineup Draft panel: first-pick radios, Start clears the sides + drafts fresh, Reset/Delete). Home team = teams[0] by name; side size from `formats.team_size` (null=Singles). Live draft promoted on /matches; feed kind 'lineup' posts "🥊 Match N set …". Phase 2 TODO: TV mode, staggered name-by-name reveal, fight-card clash with strokes (via matchcalc), fly-to-corner, bench tracker.
 
 ## Clubhouse feed
 

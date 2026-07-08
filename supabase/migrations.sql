@@ -1245,3 +1245,69 @@ end $$;
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
   check (kind in ('hole','match_final','standings','lineup','bet','draft'));
+
+-- ============================================================
+-- Lineup Draft: optional per-round snake draft that sets a round's matchups
+-- ============================================================
+
+-- One optional draft per round. Fills the round's existing matchup rows
+-- (home/away p1/p2) in snake order, so completion = lineups set exactly as
+-- the manual pickers would leave them. Manual pickers stay as the fallback.
+create table if not exists lineup_drafts (
+  id                      uuid primary key default gen_random_uuid(),
+  round_id                uuid not null references rounds(id) on delete cascade,
+  status                  text not null default 'scheduled'
+                          check (status in ('scheduled','live','complete')),
+  first_pick_team_id      uuid references teams(id) on delete set null,
+  pick_seconds            integer not null default 90,   -- soft clock only
+  current_pick_started_at timestamptz,
+  created_at              timestamptz not null default now()
+);
+create unique index if not exists lineup_drafts_round_unique on lineup_drafts(round_id);
+
+-- Each pick fills one team's side of one match (1 player for Singles, a
+-- pairing otherwise). The picks log drives turn order / undo / reveal; the
+-- matchups rows remain the downstream source of truth.
+create table if not exists lineup_draft_picks (
+  id          uuid primary key default gen_random_uuid(),
+  draft_id    uuid not null references lineup_drafts(id) on delete cascade,
+  pick_number integer not null,
+  team_id     uuid not null references teams(id) on delete cascade,
+  matchup_id  uuid not null references matchups(id) on delete cascade,
+  side        text not null check (side in ('home','away')),
+  p1_id       uuid references event_participants(id) on delete set null,
+  p2_id       uuid references event_participants(id) on delete set null,
+  picked_by   uuid references players(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  unique (draft_id, pick_number)   -- guards double-tap races
+);
+create index if not exists lineup_draft_picks_draft_idx on lineup_draft_picks(draft_id, pick_number);
+
+alter table lineup_drafts enable row level security;
+alter table lineup_draft_picks enable row level security;
+drop policy if exists "authenticated users can read lineup_drafts" on lineup_drafts;
+drop policy if exists "authenticated users can write lineup_drafts" on lineup_drafts;
+drop policy if exists "authenticated users can read lineup_draft_picks" on lineup_draft_picks;
+drop policy if exists "authenticated users can write lineup_draft_picks" on lineup_draft_picks;
+create policy "authenticated users can read lineup_drafts"
+  on lineup_drafts for select to authenticated using (true);
+-- Turn order / captain-only picking enforced by the server actions.
+create policy "authenticated users can write lineup_drafts"
+  on lineup_drafts for all to authenticated using (true) with check (true);
+create policy "authenticated users can read lineup_draft_picks"
+  on lineup_draft_picks for select to authenticated using (true);
+create policy "authenticated users can write lineup_draft_picks"
+  on lineup_draft_picks for all to authenticated using (true) with check (true);
+
+-- Realtime so every phone (and the TV) tracks picks live
+do $$
+begin
+  alter publication supabase_realtime add table lineup_drafts;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table lineup_draft_picks;
+exception when duplicate_object then null;
+end $$;

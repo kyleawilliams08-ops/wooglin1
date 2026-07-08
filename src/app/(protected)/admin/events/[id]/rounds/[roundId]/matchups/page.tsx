@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
+import { recordLineupDraftEvent } from "@/lib/feed";
 
 export default async function MatchupsPage({
   params,
@@ -82,6 +83,15 @@ export default async function MatchupsPage({
   const availableHome = homePlayers.filter((p) => !usedIds.has(p.id));
   const availableAway = awayPlayers.filter((p) => !usedIds.has(p.id));
 
+  // Optional lineup draft for this round (fills the matchups snake-style)
+  const { data: lineupDraft } = await supabase
+    .from("lineup_drafts").select("*").eq("round_id", params.roundId).maybeSingle();
+  const { count: lineupPickCount } = lineupDraft
+    ? await supabase.from("lineup_draft_picks").select("*", { count: "exact", head: true }).eq("draft_id", lineupDraft.id)
+    : { count: 0 };
+  const roundUnderway = matchups.some((m) => m.status !== "pending");
+  const canDraft = matchups.length >= 1 && !roundUnderway && !!homeTeam && !!awayTeam;
+
   // ── Server actions ──────────────────────────────────────────
 
   async function addMatchup(formData: FormData) {
@@ -129,6 +139,83 @@ export default async function MatchupsPage({
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
   }
 
+  async function startLineupDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+    const { data: ms } = await supabase
+      .from("matchups").select("id, status").eq("round_id", params.roundId);
+    if (!ms || ms.length === 0) failTo(path, { message: "Add matchups for this round first." });
+    if ((ms ?? []).some((m) => m.status !== "pending")) {
+      failTo(path, { message: "This round is already underway — can't draft lineups now." });
+    }
+    // Blank slate: clear all sides so the draft fills them fresh.
+    const { error: clearErr } = await supabase.from("matchups").update({
+      home_p1_id: null, home_p2_id: null, away_p1_id: null, away_p2_id: null,
+    }).eq("round_id", params.roundId);
+    failTo(path, clearErr);
+
+    const { data: tm } = await supabase
+      .from("teams").select("id").eq("event_id", params.id).order("name");
+    const defaultFirst = ((formData.get("first_pick") as string) || tm?.[0]?.id) ?? null;
+
+    const { data: existing } = await supabase
+      .from("lineup_drafts").select("id").eq("round_id", params.roundId).maybeSingle();
+    if (existing) {
+      await supabase.from("lineup_draft_picks").delete().eq("draft_id", existing.id);
+      const { error } = await supabase.from("lineup_drafts").update({
+        status: "live",
+        first_pick_team_id: defaultFirst,
+        current_pick_started_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+      failTo(path, error);
+    } else {
+      const { error } = await supabase.from("lineup_drafts").insert({
+        round_id: params.roundId,
+        status: "live",
+        first_pick_team_id: defaultFirst,
+        current_pick_started_at: new Date().toISOString(),
+      });
+      failTo(path, error);
+    }
+
+    const { data: rnd } = await supabase.from("rounds").select("round_number").eq("id", params.roundId).single();
+    await recordLineupDraftEvent(supabase, params.id, `📋 Lineup draft is live — Round ${rnd?.round_number ?? ""}`.trim());
+    revalidatePath(path);
+    revalidatePath(`/matches/lineup-draft/${params.roundId}`);
+    revalidatePath("/matches");
+    redirect(`/matches/lineup-draft/${params.roundId}`);
+  }
+
+  async function resetLineupDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+    const id = formData.get("draft_id") as string;
+    await supabase.from("lineup_draft_picks").delete().eq("draft_id", id);
+    const { error: clearErr } = await supabase.from("matchups").update({
+      home_p1_id: null, home_p2_id: null, away_p1_id: null, away_p2_id: null,
+    }).eq("round_id", params.roundId);
+    failTo(path, clearErr);
+    const { error } = await supabase.from("lineup_drafts")
+      .update({ status: "scheduled", current_pick_started_at: null }).eq("id", id);
+    failTo(path, error);
+    revalidatePath(path);
+    revalidatePath(`/matches/lineup-draft/${params.roundId}`);
+    revalidatePath("/matches");
+  }
+
+  async function deleteLineupDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+    // Leaves whatever lineups are set on the matchups; only drops the draft.
+    const { error } = await supabase.from("lineup_drafts").delete().eq("id", formData.get("draft_id") as string);
+    failTo(path, error);
+    revalidatePath(path);
+    revalidatePath("/matches");
+  }
+
   function resultDisplay(result: string | null, matchScore: string | null) {
     if (!result) return null;
     const homeName = homeTeam?.name ?? "Home";
@@ -171,6 +258,82 @@ export default async function MatchupsPage({
           {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
           {sideLabel[round.side]} · {round.formats?.name}
         </p>
+      </div>
+
+      {/* Lineup Draft */}
+      <div className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-navy text-sm">Lineup Draft</p>
+          {lineupDraft && (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+              lineupDraft.status === "live" ? "bg-gold text-navy"
+              : lineupDraft.status === "complete" ? "bg-europe-green text-white"
+              : "bg-navy/10 text-navy/60"
+            }`}>
+              {lineupDraft.status}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-navy/50">
+          Draft this round&rsquo;s matchups snake-style, with a big reveal to cast on the TV.
+          Optional — the pickers below still work for a quiet night.
+        </p>
+
+        {!lineupDraft || lineupDraft.status === "scheduled" ? (
+          canDraft ? (
+            <form action={startLineupDraft} className="space-y-2">
+              <p className="text-xs text-navy/50">Who picks first?</p>
+              <div className="flex gap-2">
+                {[homeTeam, awayTeam].map((t, i) => (
+                  <label key={t!.id} className="flex-1 cursor-pointer">
+                    <input type="radio" name="first_pick" value={t!.id} defaultChecked={i === 0} className="peer sr-only" />
+                    <span className="flex items-center justify-center gap-1.5 rounded-lg border border-hairline bg-white px-3 py-2 text-center text-sm font-semibold text-navy peer-checked:border-navy peer-checked:bg-navy peer-checked:text-off-white">
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: t!.color }} />
+                      {t!.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <button type="submit" className="w-full rounded-lg bg-europe-green py-2 text-sm font-bold text-white">
+                🐉 Start Lineup Draft
+              </button>
+            </form>
+          ) : (
+            <p className="rounded-lg bg-gold/15 px-3 py-2 text-xs text-navy/70">
+              {roundUnderway
+                ? "This round is underway — lineups are locked."
+                : !homeTeam || !awayTeam
+                ? "The event needs two teams first."
+                : "Add matchups below before drafting."}
+            </p>
+          )
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Link href={`/matches/lineup-draft/${params.roundId}`}
+                className="flex-1 rounded-lg bg-navy py-2 text-center text-sm font-semibold text-off-white">
+                Open Draft Room
+              </Link>
+              <DeleteButton
+                action={resetLineupDraft}
+                fields={{ draft_id: lineupDraft.id }}
+                confirm="Reset the lineup draft? All picks clear and the matchups blank out."
+                label="Reset"
+                className="rounded-lg border border-usa-red/40 px-3 py-2 text-sm font-semibold text-usa-red"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-navy/50">{lineupPickCount ?? 0} of {matchups.length * 2} picks in</span>
+              <DeleteButton
+                action={deleteLineupDraft}
+                fields={{ draft_id: lineupDraft.id }}
+                confirm="Delete this lineup draft? The matchups keep whatever's set."
+                label="Delete draft"
+                className="text-xs text-usa-red hover:underline"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Matchup list */}

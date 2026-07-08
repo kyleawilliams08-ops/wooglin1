@@ -94,6 +94,18 @@ export default async function MatchesPage({
     course_tees: { tee_name: string; courses: { name: string } | null } | null;
   }[];
 
+  // A live lineup draft (nightly pairing ceremony) to promote at the top
+  const { data: liveDrafts } = rounds.length > 0
+    ? await supabase
+        .from("lineup_drafts")
+        .select("round_id, status")
+        .in("round_id", rounds.map((r) => r.id))
+        .eq("status", "live")
+        .limit(1)
+    : { data: [] as { round_id: string; status: string }[] };
+  const liveDraft = liveDrafts?.[0] ?? null;
+  const liveDraftRound = liveDraft ? rounds.find((r) => r.id === liveDraft.round_id) ?? null : null;
+
   const { data: matchupsRaw } = rounds.length > 0
     ? await supabase
         .from("matchups")
@@ -280,6 +292,28 @@ export default async function MatchesPage({
           </div>
         </div>
       </div>
+
+      {liveDraftRound && (
+        <div className="px-4 pt-4">
+          <Link href={`/matches/lineup-draft/${liveDraftRound.id}`}
+            className="block rounded-2xl bg-navy p-4 ring-2 ring-gold">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-hairline/60">
+                  Round {liveDraftRound.round_number} · Lineup Draft
+                </p>
+                <p className="mt-0.5 font-display text-lg font-bold text-off-white">
+                  🥊 The pairings draft is LIVE
+                </p>
+              </div>
+              <span className="animate-pulse rounded-full bg-gold px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-navy">
+                ● Live
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-gold">Watch the picks →</p>
+          </Link>
+        </div>
+      )}
 
       <div className="px-4 pt-4 space-y-5">
         {rounds.length === 0 && (

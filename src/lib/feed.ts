@@ -502,3 +502,23 @@ export async function recordDraftEvent(supabase: Supa, eventId: string, message:
     // best-effort
   }
 }
+
+/**
+ * Lineup-draft announcements: "📋 Lineup draft is live — Round 2" and, as
+ * each match's two sides fill, "🥊 Match 3 set: Kyle & Brendan (USA) vs Alex
+ * & Shoops (Europe)". Best-effort like the rest — a feed hiccup must never
+ * block a pick.
+ */
+export async function recordLineupDraftEvent(supabase: Supa, eventId: string, message: string): Promise<void> {
+  try {
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "lineup",
+      hole_number: 0,
+      message,
+    });
+  } catch {
+    // best-effort
+  }
+}
