@@ -1091,10 +1091,12 @@ create policy "authenticated users can read bet_participants"
 create policy "authenticated users can write bet_participants"
   on bet_participants for all to authenticated using (true) with check (true);
 
--- Feed: allow 'bet' entries
+-- Feed: allow 'bet' entries. (Kept forward-compatible with 'draft' below so a
+-- full re-run of this file doesn't drop the newer constraint and then fail to
+-- re-add it against feed rows that already use 'draft'.)
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
-  check (kind in ('hole','match_final','standings','lineup','bet'));
+  check (kind in ('hole','match_final','standings','lineup','bet','draft'));
 
 -- ============================================================
 -- Betting v2: no acceptance (bets are live immediately) + protests
