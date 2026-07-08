@@ -1311,3 +1311,27 @@ begin
   alter publication supabase_realtime add table lineup_draft_picks;
 exception when duplicate_object then null;
 end $$;
+
+-- ============================================================
+-- Live Draft fix: let event captains assign teams during the draft
+-- ============================================================
+-- The player draft writes event_participants.team_id on each pick, but that
+-- table was admin-only for writes — so a captain's pick recorded the pick yet
+-- RLS silently blocked the team assignment and the player never left the pool.
+-- Mirror the existing "captains can update event matchups" policy. (The SELECT
+-- subquery runs under the permissive read policy, so no RLS recursion.)
+drop policy if exists "captains can update event participants" on event_participants;
+create policy "captains can update event participants" on event_participants
+  for update to authenticated
+  using (exists (
+    select 1 from event_participants cap
+    join players p on p.id = cap.player_id
+    where cap.event_id = event_participants.event_id and cap.is_captain
+      and p.auth_user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from event_participants cap
+    join players p on p.id = cap.player_id
+    where cap.event_id = event_participants.event_id and cap.is_captain
+      and p.auth_user_id = auth.uid()
+  ));

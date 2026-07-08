@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { makePick, undoLastPick } from "@/lib/draftActions";
+import { makePick, undoLastPick, startPlayerDraft } from "@/lib/draftActions";
 import { teamIndexForPick, pickLabel, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -176,6 +176,14 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     });
   };
 
+  const start = () => {
+    setError(null);
+    startTransition(async () => {
+      const { error } = await startPlayerDraft(draft.id);
+      if (error) setError(error);
+    });
+  };
+
   const selectedPlayer = draft.pool.find((p) => p.participantId === selected) ?? null;
 
   /* ---------- pick reveal overlay (phone + TV) ---------- */
@@ -325,6 +333,15 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
           <p className="mt-2 text-sm text-hairline">
             {draft.pool.length} players in the pool · {draft.teams[0].name} picks first
           </p>
+          {draft.viewerIsAdmin && (
+            <button
+              onClick={start}
+              disabled={isPending || draft.pool.length === 0}
+              className="mt-4 w-full rounded-lg bg-europe-green py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {isPending ? "Starting…" : "🐉 Start the Draft"}
+            </button>
+          )}
         </div>
       )}
 

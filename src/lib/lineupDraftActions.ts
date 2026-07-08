@@ -148,14 +148,19 @@ export async function makeLineupPick(
     };
   }
 
-  const { error: matchupError } = await supabase.from("matchups").update({
+  const { data: written, error: matchupError } = await supabase.from("matchups").update({
     [`${side}_p1_id`]: ids[0],
     [`${side}_p2_id`]: sideSize === 2 ? (ids[1] ?? null) : null,
-  }).eq("id", matchup.id);
-  if (matchupError) {
-    // Roll the pick back so board and matchup can't disagree.
+  }).eq("id", matchup.id).select("id");
+  if (matchupError || !written?.length) {
+    // Roll the pick back so board and matchup can't disagree. A 0-row result
+    // with no error means RLS blocked the write — surface it rather than
+    // leaving a phantom pick.
     await supabase.from("lineup_draft_picks").delete().eq("draft_id", draftId).eq("pick_number", nextPick);
-    return { error: matchupError.message };
+    return {
+      error: matchupError?.message
+        ?? "Couldn't set the pairing — a permissions issue blocked the write. Make sure the latest migrations.sql has been run.",
+    };
   }
 
   const done = nextPick === totalPicks;

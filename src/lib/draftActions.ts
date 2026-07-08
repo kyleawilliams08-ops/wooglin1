@@ -102,13 +102,19 @@ export async function makePick(
     };
   }
 
-  const { error: assignError } = await supabase
-    .from("event_participants").update({ team_id: onClock.id }).eq("id", participantId);
-  if (assignError) {
-    // Roll the pick back so the board and the roster can't disagree.
+  const { data: assigned, error: assignError } = await supabase
+    .from("event_participants").update({ team_id: onClock.id }).eq("id", participantId).select("id");
+  if (assignError || !assigned?.length) {
+    // Roll the pick back so the board and the roster can't disagree. A 0-row
+    // result with no error means RLS blocked the write (e.g. a captain before
+    // the update policy has run) — surface it instead of leaving a phantom
+    // pick with the player still in the pool.
     await supabase.from("draft_picks").delete()
       .eq("draft_id", draftId).eq("pick_number", nextPick);
-    return { error: assignError.message };
+    return {
+      error: assignError?.message
+        ?? "Couldn't assign the player — a permissions issue blocked the write. Make sure the latest migrations.sql has been run.",
+    };
   }
 
   // Anyone left in the pool? If not, the rosters are set.
@@ -131,6 +137,39 @@ export async function makePick(
       "✅ The draft is complete — rosters are set!");
   }
 
+  revalidatePath("/draft");
+  revalidatePath("/");
+  return { error: null };
+}
+
+/**
+ * Admin-only: flip a scheduled draft to live (a convenience so the
+ * commissioner can start straight from the draft room, not only the event
+ * setup page). Requires at least one undrafted player in the pool.
+ */
+export async function startPlayerDraft(draftId: string): Promise<{ error: string | null }> {
+  const player = await requirePlayer();
+  if (!isAdmin(player)) return { error: "Only the commissioner can start the draft." };
+  const supabase = createClient();
+
+  const { data: draft } = await supabase
+    .from("drafts").select("id, event_id, status, events(year)").eq("id", draftId).single();
+  if (!draft) return { error: "Draft not found." };
+  if (draft.status !== "scheduled") return { error: "The draft has already started." };
+
+  const { count: poolCount } = await supabase
+    .from("event_participants").select("*", { count: "exact", head: true })
+    .eq("event_id", draft.event_id).eq("is_captain", false).is("team_id", null);
+  if ((poolCount ?? 0) === 0) return { error: "Add players to the draft pool before starting." };
+
+  const { error } = await supabase.from("drafts").update({
+    status: "live",
+    current_pick_started_at: new Date().toISOString(),
+  }).eq("id", draftId);
+  if (error) return { error: error.message };
+
+  const year = (draft.events as unknown as { year: number } | null)?.year;
+  await recordDraftEvent(supabase, draft.event_id, `🐉 The${year ? ` ${year}` : ""} draft is LIVE — watch the picks!`);
   revalidatePath("/draft");
   revalidatePath("/");
   return { error: null };
