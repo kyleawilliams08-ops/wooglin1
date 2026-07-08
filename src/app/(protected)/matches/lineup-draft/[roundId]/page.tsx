@@ -1,12 +1,14 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { computePlayingHcps, isOneScoreFormat } from "@/lib/matchcalc";
 import {
   LineupDraftRoom,
   type LineupDraftView,
   type LineupMatchupView,
   type RosterPlayer,
   type SidePlayer,
+  type StrokesInfo,
 } from "@/components/LineupDraftRoom";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +22,22 @@ type Part = {
   players: { nickname: string | null; avatar_url: string | null; current_index: number | null } | null;
 };
 
-export default async function LineupDraftPage({ params }: { params: { roundId: string } }) {
+export default async function LineupDraftPage({
+  params,
+  searchParams,
+}: {
+  params: { roundId: string };
+  searchParams: { tv?: string };
+}) {
   const player = await requirePlayer();
   const supabase = createClient();
 
   const { data: draft } = await supabase
-    .from("lineup_drafts").select("*").eq("round_id", params.roundId).single();
+    .from("lineup_drafts").select("*").eq("round_id", params.roundId).maybeSingle();
 
   const { data: round } = await supabase
     .from("rounds")
-    .select("id, event_id, round_number, name, formats(team_size), events(name)")
+    .select("id, event_id, round_number, name, side, course_tee_id, formats(team_size, name, hcp_allowance, hcp_allowance_secondary), events(name)")
     .eq("id", params.roundId).single();
 
   if (!draft || !round) {
@@ -89,6 +97,23 @@ export default async function LineupDraftPage({ params }: { params: { roundId: s
       .sort((a, b) => (a.index ?? 99) - (b.index ?? 99));
   }
 
+  // Handicaps for the fight-card strokes line (same path as the live board)
+  const { data: hcpRows } = await supabase
+    .from("participant_handicaps")
+    .select("player_id, course_tee_id, calculated_hcp, override_hcp")
+    .eq("event_id", round.event_id);
+  const teeId = round.course_tee_id as string;
+  const fmt = round.formats as unknown as
+    { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
+  const nineHole = round.side !== "full";
+  const playerIdOf = (participantId: string | null) => (participantId ? byId.get(participantId)?.player_id ?? null : null);
+  const courseHcp = (participantId: string | null): number => {
+    const pid = playerIdOf(participantId);
+    if (!pid) return 0;
+    const row = hcpRows?.find((h) => h.player_id === pid && h.course_tee_id === teeId);
+    return row?.override_hcp ?? row?.calculated_hcp ?? 0;
+  };
+
   const { data: matchupsRaw } = await supabase
     .from("matchups")
     .select("id, match_number, home_p1_id, home_p2_id, away_p1_id, away_p2_id")
@@ -100,21 +125,43 @@ export default async function LineupDraftPage({ params }: { params: { roundId: s
     const p = byId.get(pid);
     return p ? { id: p.id, name: nameOf(p), avatarUrl: p.players?.avatar_url ?? null } : null;
   };
+  const strokesFor = (m: {
+    home_p1_id: string | null; home_p2_id: string | null;
+    away_p1_id: string | null; away_p2_id: string | null;
+  }): StrokesInfo | null => {
+    if (!fmt || !m.home_p1_id || !m.away_p1_id) return null;
+    const p = computePlayingHcps(fmt, {
+      homeP1: courseHcp(m.home_p1_id),
+      homeP2: m.home_p2_id ? courseHcp(m.home_p2_id) : null,
+      awayP1: courseHcp(m.away_p1_id),
+      awayP2: m.away_p2_id ? courseHcp(m.away_p2_id) : null,
+    }, nineHole);
+    return {
+      oneScore: isOneScoreFormat(fmt.name),
+      home: { p1: p.homeP1, p2: p.homeP2 },
+      away: { p1: p.awayP1, p2: p.awayP2 },
+      homeTeam: p.homeTeam,
+      awayTeam: p.awayTeam,
+    };
+  };
   const matchups: LineupMatchupView[] = (matchupsRaw ?? []).map((m) => ({
     id: m.id,
     matchNumber: m.match_number,
     home: { p1: side(m.home_p1_id), p2: side(m.home_p2_id) },
     away: { p1: side(m.away_p1_id), p2: side(m.away_p2_id) },
+    strokes: strokesFor(m),
   }));
 
   const { data: picksRaw } = await supabase
     .from("lineup_draft_picks")
-    .select("pick_number, team_id, p1_id, p2_id")
+    .select("pick_number, team_id, matchup_id, side, p1_id, p2_id")
     .eq("draft_id", draft.id)
     .order("pick_number");
   const picks = (picksRaw ?? []).map((pk) => ({
     pickNumber: pk.pick_number,
     teamId: pk.team_id,
+    matchupId: pk.matchup_id,
+    side: pk.side as "home" | "away",
     names: [pk.p1_id, pk.p2_id]
       .filter(Boolean)
       .map((id) => (byId.get(id as string) ? nameOf(byId.get(id as string)!) : "?")),
@@ -124,6 +171,7 @@ export default async function LineupDraftPage({ params }: { params: { roundId: s
 
   const view: LineupDraftView = {
     id: draft.id,
+    roundId: params.roundId,
     status: draft.status,
     roundNumber: round.round_number,
     roundName: round.name,
@@ -141,6 +189,9 @@ export default async function LineupDraftPage({ params }: { params: { roundId: s
     viewerIsAdmin: isAdmin(player),
   };
 
+  const tv = searchParams.tv === "1";
+  if (tv) return <LineupDraftRoom draft={view} tv />;
+
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="flex items-baseline justify-between">
@@ -151,7 +202,7 @@ export default async function LineupDraftPage({ params }: { params: { roundId: s
           Matches
         </Link>
       </div>
-      <LineupDraftRoom draft={view} />
+      <LineupDraftRoom draft={view} tv={false} />
     </div>
   );
 }
