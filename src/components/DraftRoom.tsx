@@ -112,6 +112,16 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     };
   }, [router, draft.id]);
 
+  // Polling fallback: postgres_changes realtime can be flaky across devices
+  // (and needs the tables in the publication), so while the draft is live we
+  // also re-pull every few seconds. Cheap for a room of ~20, and guarantees
+  // every phone converges even if a realtime event is dropped.
+  useEffect(() => {
+    if (draft.status !== "live") return;
+    const t = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(t);
+  }, [router, draft.status]);
+
   // Soft pick clock — ticks locally off the server-set anchor.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

@@ -119,6 +119,13 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     };
   }, [router, draft.id]);
 
+  // Polling fallback for flaky cross-device realtime (see DraftRoom).
+  useEffect(() => {
+    if (draft.status !== "live") return;
+    const t = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(t);
+  }, [router, draft.status]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (draft.status !== "live") return;
