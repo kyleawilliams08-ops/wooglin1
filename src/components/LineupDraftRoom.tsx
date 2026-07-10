@@ -290,18 +290,32 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
         </div>
       );
     }
+    if (tv) {
+      // TV rows: record stacked UNDER the full name so long names get the
+      // whole row width instead of fighting a chip for it.
+      return (
+        <div className="space-y-1.5 rounded-lg p-2.5" style={{ backgroundColor: t.color }}>
+          {players.map((p) => (
+            <div key={p.id} className="flex items-center gap-2.5">
+              <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
+                className="h-10 w-10 shrink-0 text-xs ring-1 ring-gold/70" />
+              <div className="min-w-0">
+                <p className="truncate text-lg font-semibold leading-tight text-white">{p.fullName}</p>
+                <p className="text-xs font-bold tabular-nums text-white/65">{p.record}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
     return (
-      <div className={`space-y-1 rounded-lg ${tv ? "p-2.5" : "p-2"}`} style={{ backgroundColor: t.color }}>
+      <div className="space-y-1 rounded-lg p-2" style={{ backgroundColor: t.color }}>
         {players.map((p) => (
           <div key={p.id} className="flex items-center gap-2">
             <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
-              className={`${tv ? "h-9 w-9 text-xs" : "h-6 w-6 text-[9px]"} shrink-0 ring-1 ring-gold/70`} />
-            <span className={`min-w-0 truncate font-semibold text-white ${tv ? "text-xl" : "text-xs"}`}>
-              {tv ? p.fullName : p.name}
-            </span>
-            <span className={`ml-auto shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 font-bold tabular-nums text-white ${
-              tv ? "text-sm" : "text-[9px]"
-            }`}>
+              className="h-6 w-6 shrink-0 text-[9px] ring-1 ring-gold/70" />
+            <span className="min-w-0 truncate text-xs font-semibold text-white">{p.name}</span>
+            <span className="ml-auto shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-white">
               {p.record}
             </span>
           </div>
