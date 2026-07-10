@@ -10,7 +10,13 @@ import { teamIndexForPick, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
 export interface LineupTeam { id: string; name: string; color: string; captainName: string | null }
-export interface SidePlayer { id: string; name: string; avatarUrl: string | null }
+export interface SidePlayer {
+  id: string;
+  name: string;       // nickname (phone)
+  fullName: string;   // full name (TV)
+  avatarUrl: string | null;
+  record: string;     // this event's W–L(–T), e.g. "2–0"
+}
 export interface StrokesInfo {
   oneScore: boolean;
   home: { p1: number; p2: number | null };
@@ -32,6 +38,7 @@ export interface LineupPickView {
   matchupId: string;
   side: "home" | "away";
   names: string[];
+  fullNames: string[];
 }
 
 export interface LineupDraftView {
@@ -150,16 +157,17 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
   const buildReveal = (pick: LineupPickView): RevealData => {
     const team = teamOf(pick.teamId);
     const m = draft.matchups.find((x) => x.id === pick.matchupId);
+    const label = (p: SidePlayer) => (tv ? p.fullName : p.name);
     let fight: FightData | null = null;
     if (m && m.home.p1 && m.away.p1) {
       const s = m.strokes;
       const homeStrokes = s ? (s.oneScore ? [s.homeTeam] : [s.home.p1, s.home.p2]) : [];
       const awayStrokes = s ? (s.oneScore ? [s.awayTeam] : [s.away.p1, s.away.p2]) : [];
       const homePlayers = [m.home.p1, m.home.p2].filter(Boolean).map((p, i) => ({
-        name: (p as SidePlayer).name, strokes: s?.oneScore ? null : (homeStrokes[i] ?? null),
+        name: label(p as SidePlayer), strokes: s?.oneScore ? null : (homeStrokes[i] ?? null),
       }));
       const awayPlayers = [m.away.p1, m.away.p2].filter(Boolean).map((p, i) => ({
-        name: (p as SidePlayer).name, strokes: s?.oneScore ? null : (awayStrokes[i] ?? null),
+        name: label(p as SidePlayer), strokes: s?.oneScore ? null : (awayStrokes[i] ?? null),
       }));
       fight = {
         matchNumber: m.matchNumber,
@@ -170,7 +178,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
           [...homePlayers, ...awayPlayers]),
       };
     }
-    return { teamName: team.name, teamColor: team.color, names: pick.names, fight };
+    return { teamName: team.name, teamColor: team.color, names: tv ? pick.fullNames : pick.names, fight };
   };
 
   useEffect(() => {
@@ -268,33 +276,66 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     </div>
   );
 
-  // ── The board (fly-to-corner grid) ──────────────────────────────────────
+  // ── The board ───────────────────────────────────────────────────────────
+  // Filled sides get a team-color block with one row per player: photo, name
+  // (full names on TV), and their record this cup. Empty sides stay ghosted.
+  const sideBlock = (s: { p1: SidePlayer | null; p2: SidePlayer | null }, t: LineupTeam) => {
+    const players = [s.p1, s.p2].filter(Boolean) as SidePlayer[];
+    if (players.length === 0) {
+      return (
+        <div className={`flex min-h-full items-center justify-center rounded-lg border border-dashed ${
+          tv ? "border-white/15 py-4" : "border-hairline py-3"
+        }`}>
+          <span className={tv ? "text-lg text-white/25" : "text-xs text-navy/25"}>—</span>
+        </div>
+      );
+    }
+    return (
+      <div className={`space-y-1 rounded-lg ${tv ? "p-2.5" : "p-2"}`} style={{ backgroundColor: t.color }}>
+        {players.map((p) => (
+          <div key={p.id} className="flex items-center gap-2">
+            <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
+              className={`${tv ? "h-9 w-9 text-xs" : "h-6 w-6 text-[9px]"} shrink-0 ring-1 ring-gold/70`} />
+            <span className={`min-w-0 truncate font-semibold text-white ${tv ? "text-xl" : "text-xs"}`}>
+              {tv ? p.fullName : p.name}
+            </span>
+            <span className={`ml-auto shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 font-bold tabular-nums text-white ${
+              tv ? "text-sm" : "text-[9px]"
+            }`}>
+              {p.record}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const board = (
-    <div className={`grid gap-3 ${draft.matchups.length > 4 ? "grid-cols-2" : draft.matchups.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+    <div className={tv ? "grid grid-cols-2 gap-4" : "space-y-3"}>
       {draft.matchups.map((m) => {
         const bothIn = !!(m.home.p1 && m.away.p1);
         const active = draft.status === "live" && m.matchNumber === currentMatchNumber;
-        const nameStr = (s: { p1: SidePlayer | null; p2: SidePlayer | null }) =>
-          [s.p1?.name, s.p2?.name].filter(Boolean).join(" & ");
         return (
           <div key={m.id}
-            className={`draft-row-in overflow-hidden rounded-xl border ${
-              tv ? "border-white/15" : "border-hairline bg-white"
+            className={`draft-row-in overflow-hidden rounded-xl ${
+              tv ? "bg-off-white shadow-lg" : "border border-hairline bg-white"
             } ${active && !bothIn ? "ring-2 ring-gold" : ""}`}>
-            <p className={`px-3 pt-2 font-semibold uppercase tracking-wide ${tv ? "text-sm text-white/50" : "text-[10px] text-navy/40"}`}>
-              Match {m.matchNumber}
-            </p>
-            <div className="grid grid-cols-2 gap-px p-2">
-              {[{ s: m.home, t: draft.homeTeam }, { s: m.away, t: draft.awayTeam }].map(({ s, t }, i) => (
-                <div key={i} className="rounded-lg px-2 py-1.5"
-                  style={s.p1 ? { backgroundColor: t.color } : undefined}>
-                  <p className={`truncate font-semibold ${
-                    s.p1 ? "text-white" : tv ? "text-white/30" : "text-navy/30"
-                  } ${tv ? "text-lg" : "text-xs"}`}>
-                    {s.p1 ? nameStr(s) : "—"}
-                  </p>
-                </div>
-              ))}
+            <div className="flex items-center justify-between px-3 pt-2">
+              <p className={`font-semibold uppercase tracking-wide ${tv ? "text-sm text-navy/50" : "text-[10px] text-navy/40"}`}>
+                Match {m.matchNumber}
+              </p>
+              {bothIn && (
+                <p className={`font-bold uppercase tracking-wide text-gold ${tv ? "text-sm" : "text-[9px]"}`}>Set</p>
+              )}
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 p-2">
+              {sideBlock(m.home, draft.homeTeam)}
+              <span className={`self-center font-display font-bold ${
+                tv ? "text-2xl text-navy/40" : "text-sm text-navy/30"
+              }`}>
+                vs
+              </span>
+              {sideBlock(m.away, draft.awayTeam)}
             </div>
           </div>
         );
@@ -302,25 +343,49 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     </div>
   );
 
-  const benchStrip = (team: LineupTeam) => {
-    const bench = benchOf(team.id);
-    if (bench.length === 0) return null;
-    return (
-      <div className={tv ? "text-base" : "text-[11px]"}>
-        <span className={tv ? "text-white/50" : "text-navy/40"}>{team.name} bench: </span>
-        <span className={tv ? "text-white/70" : "text-navy/55"}>
-          {bench.map((p) => p.name).join(" · ")}
-        </span>
-      </div>
-    );
-  };
+  // Bench tracker: who each captain is still holding.
+  const benchCard = (
+    <div className={tv
+      ? "rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3"
+      : "rounded-xl border border-hairline bg-parchment px-4 py-3 space-y-2"}>
+      {[draft.homeTeam, draft.awayTeam].map((team) => {
+        const bench = benchOf(team.id);
+        return (
+          <div key={team.id}>
+            <p className={`mb-1 flex items-center gap-1.5 font-semibold uppercase tracking-wide ${
+              tv ? "text-sm text-white/50" : "text-[10px] text-navy/40"
+            }`}>
+              <span className={`inline-block rounded-full ${tv ? "h-2.5 w-2.5" : "h-2 w-2"}`}
+                style={{ backgroundColor: team.color }} />
+              {team.name} bench
+            </p>
+            {bench.length === 0 ? (
+              <p className={tv ? "text-base text-white/35" : "text-[11px] text-navy/35"}>Everyone&rsquo;s in.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {bench.map((p) => (
+                  <span key={p.id} className={`flex items-center gap-1.5 rounded-full ${
+                    tv ? "bg-white/10 px-2.5 py-1 text-base text-white/80" : "bg-white px-2 py-0.5 text-[11px] text-navy/70 border border-hairline"
+                  }`}>
+                    <Avatar url={p.avatarUrl} name={p.name} color={team.color}
+                      className={`${tv ? "h-6 w-6 text-[9px]" : "h-4 w-4 text-[7px]"} shrink-0`} />
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   // ── TV mode ─────────────────────────────────────────────────────────────
   if (tv) {
     return (
       <div className="fixed inset-0 z-[900] overflow-y-auto bg-navy px-10 py-8">
         {overlay}
-        <div className="mx-auto max-w-5xl space-y-7">
+        <div className="mx-auto max-w-6xl space-y-7">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Image src="/crest-small.png" alt="" width={64} height={64} />
@@ -344,34 +409,37 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
             </div>
           </div>
 
-          {draft.status === "live" && nextPick <= totalPicks && (
-            <div className="rounded-2xl px-8 py-5 text-center" style={{ backgroundColor: onClock.color }}>
-              <p className="text-lg font-semibold uppercase tracking-[0.3em] text-white/70">
-                {isLead ? "On the clock · leads" : "On the clock · answers"}
-              </p>
-              <p className="mt-1 font-display text-5xl font-bold text-white">{onClock.name}</p>
-              <p className="mt-1 text-xl text-white/80">Match {currentMatchNumber} · Capt. {onClock.captainName ?? "TBD"}</p>
-              {remaining !== null && (
-                <p className={`mt-2 font-mono text-6xl font-bold tabular-nums ${overTime ? "animate-pulse text-usa-red" : "text-gold"}`}>
-                  {fmtClock(remaining)}
-                </p>
+          <div className="grid grid-cols-[minmax(300px,380px)_minmax(0,1fr)] items-start gap-6">
+            {/* left rail: on the clock + benches */}
+            <div className="space-y-5">
+              {draft.status === "live" && nextPick <= totalPicks && (
+                <div className="rounded-2xl px-6 py-8 text-center shadow-xl" style={{ backgroundColor: onClock.color }}>
+                  <p className="text-base font-semibold uppercase tracking-[0.3em] text-white/70">
+                    {isLead ? "On the clock · leads" : "On the clock · answers"}
+                  </p>
+                  <p className="mt-2 font-display text-6xl font-bold text-white">{onClock.name}</p>
+                  <p className="mt-2 text-xl text-white/80">
+                    Match {currentMatchNumber} · Capt. {onClock.captainName ?? "TBD"}
+                  </p>
+                  {remaining !== null && (
+                    <p className={`mt-4 font-mono text-8xl font-bold tabular-nums ${overTime ? "animate-pulse text-off-white" : "text-gold"}`}>
+                      {fmtClock(remaining)}
+                    </p>
+                  )}
+                  {overTime && <p className="mt-1 text-xl font-semibold text-white/90">Taking their sweet time…</p>}
+                </div>
               )}
+              {draft.status === "complete" && (
+                <div className="rounded-2xl bg-gold px-6 py-8 text-center shadow-xl">
+                  <p className="font-display text-5xl font-bold text-navy">Lineups Set</p>
+                  <p className="mt-2 text-xl text-navy/70">Round {draft.roundNumber} is ready. 🐉</p>
+                </div>
+              )}
+              {benchCard}
             </div>
-          )}
-          {draft.status === "complete" && (
-            <div className="rounded-2xl border border-gold bg-gold/10 px-8 py-5 text-center">
-              <p className="font-display text-4xl font-bold text-gold">Lineups Set</p>
-              <p className="mt-1 text-xl text-off-white/80">
-                Round {draft.roundNumber} is ready. 🐉
-              </p>
-            </div>
-          )}
 
-          {board}
-
-          <div className="space-y-1">
-            {benchStrip(draft.homeTeam)}
-            {benchStrip(draft.awayTeam)}
+            {/* right: the board */}
+            {board}
           </div>
         </div>
       </div>
@@ -420,12 +488,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
 
       {board}
 
-      {(benchOf(draft.homeTeam.id).length > 0 || benchOf(draft.awayTeam.id).length > 0) && draft.status !== "complete" && (
-        <div className="space-y-1 rounded-xl border border-hairline bg-parchment px-4 py-3">
-          {benchStrip(draft.homeTeam)}
-          {benchStrip(draft.awayTeam)}
-        </div>
-      )}
+      {draft.status !== "complete" && benchCard}
 
       {myTurn && (
         <div>

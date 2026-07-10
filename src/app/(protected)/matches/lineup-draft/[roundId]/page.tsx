@@ -19,7 +19,7 @@ type Part = {
   team_id: string | null;
   display_name: string;
   is_captain: boolean;
-  players: { nickname: string | null; avatar_url: string | null; current_index: number | null } | null;
+  players: { name: string; nickname: string | null; avatar_url: string | null; current_index: number | null } | null;
 };
 
 export default async function LineupDraftPage({
@@ -74,11 +74,39 @@ export default async function LineupDraftPage({
 
   const { data: participantsRaw } = await supabase
     .from("event_participants")
-    .select("id, player_id, team_id, display_name, is_captain, players(nickname, avatar_url, current_index)")
+    .select("id, player_id, team_id, display_name, is_captain, players(name, nickname, avatar_url, current_index)")
     .eq("event_id", round.event_id);
   const parts = (participantsRaw ?? []) as unknown as Part[];
   const nameOf = (p: Part) => p.players?.nickname ?? p.display_name;
+  const fullNameOf = (p: Part) => p.players?.name ?? p.display_name;
   const byId = new Map(parts.map((p) => [p.id, p]));
+
+  // Weekend records: W–L(–T) per participant across this event's completed
+  // matches, shown on the board rows once a player is slotted.
+  const { data: eventRounds } = await supabase
+    .from("rounds").select("id").eq("event_id", round.event_id);
+  const { data: decided } = (eventRounds?.length ?? 0) > 0
+    ? await supabase
+        .from("matchups")
+        .select("home_p1_id, home_p2_id, away_p1_id, away_p2_id, result")
+        .in("round_id", (eventRounds ?? []).map((r) => r.id))
+        .not("result", "is", null)
+    : { data: [] };
+  const tally: Record<string, { w: number; l: number; t: number }> = {};
+  const bump = (pid: string | null, key: "w" | "l" | "t") => {
+    if (!pid) return;
+    (tally[pid] ??= { w: 0, l: 0, t: 0 })[key] += 1;
+  };
+  for (const m of decided ?? []) {
+    const homeKey = m.result === "home" ? "w" : m.result === "away" ? "l" : "t";
+    const awayKey = m.result === "away" ? "w" : m.result === "home" ? "l" : "t";
+    bump(m.home_p1_id, homeKey); bump(m.home_p2_id, homeKey);
+    bump(m.away_p1_id, awayKey); bump(m.away_p2_id, awayKey);
+  }
+  const recordOf = (participantId: string): string => {
+    const r = tally[participantId] ?? { w: 0, l: 0, t: 0 };
+    return `${r.w}–${r.l}${r.t > 0 ? `–${r.t}` : ""}`;
+  };
 
   const captainName = (teamId: string) => {
     const cap = parts.find((p) => p.is_captain && p.team_id === teamId);
@@ -123,7 +151,15 @@ export default async function LineupDraftPage({
   const side = (pid: string | null): SidePlayer | null => {
     if (!pid) return null;
     const p = byId.get(pid);
-    return p ? { id: p.id, name: nameOf(p), avatarUrl: p.players?.avatar_url ?? null } : null;
+    return p
+      ? {
+          id: p.id,
+          name: nameOf(p),
+          fullName: fullNameOf(p),
+          avatarUrl: p.players?.avatar_url ?? null,
+          record: recordOf(p.id),
+        }
+      : null;
   };
   const strokesFor = (m: {
     home_p1_id: string | null; home_p2_id: string | null;
@@ -157,15 +193,17 @@ export default async function LineupDraftPage({
     .select("pick_number, team_id, matchup_id, side, p1_id, p2_id")
     .eq("draft_id", draft.id)
     .order("pick_number");
-  const picks = (picksRaw ?? []).map((pk) => ({
-    pickNumber: pk.pick_number,
-    teamId: pk.team_id,
-    matchupId: pk.matchup_id,
-    side: pk.side as "home" | "away",
-    names: [pk.p1_id, pk.p2_id]
-      .filter(Boolean)
-      .map((id) => (byId.get(id as string) ? nameOf(byId.get(id as string)!) : "?")),
-  }));
+  const picks = (picksRaw ?? []).map((pk) => {
+    const pickedIds = [pk.p1_id, pk.p2_id].filter(Boolean) as string[];
+    return {
+      pickNumber: pk.pick_number,
+      teamId: pk.team_id,
+      matchupId: pk.matchup_id,
+      side: pk.side as "home" | "away",
+      names: pickedIds.map((id) => (byId.get(id) ? nameOf(byId.get(id)!) : "?")),
+      fullNames: pickedIds.map((id) => (byId.get(id) ? fullNameOf(byId.get(id)!) : "?")),
+    };
+  });
 
   const myCaptaincy = parts.find((p) => p.is_captain && p.player_id === player.id);
 
