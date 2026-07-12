@@ -14,7 +14,7 @@ export default async function EventDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { error?: string };
+  searchParams: { error?: string; section?: string };
 }) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
@@ -150,6 +150,7 @@ export default async function EventDetailPage({
     }).eq("id", params.id);
     failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
+    redirect(`/admin/events/${params.id}?section=details&saved=1`);
   }
 
   async function deleteEvent(formData: FormData) {
@@ -357,11 +358,30 @@ export default async function EventDetailPage({
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
   const draftInputCls = "w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy";
 
+  const section = ["schedule", "teams", "draft"].includes(searchParams.section ?? "")
+    ? (searchParams.section as string)
+    : "details";
+
   return (
     <div className="px-4 py-6 space-y-6">
       <Link href="/admin/events" className="text-sm text-navy/50 hover:text-navy">← Events</Link>
+      <h1 className="text-2xl font-display font-bold text-navy">{event.name}</h1>
       <ErrorBanner message={searchParams.error} />
 
+      {/* Section tabs */}
+      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+        {([["details", "Details"], ["schedule", "Schedule"], ["teams", "Teams"], ["draft", "Draft"]] as const).map(([s, label]) => (
+          <Link key={s} href={`/admin/events/${params.id}?section=${s}`}
+            className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${
+              section === s ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
+            }`}>
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      {section === "details" && (
+      <>
       {/* Edit event */}
       <form action={updateEvent} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
         <p className="font-semibold text-navy text-sm">Event Details</p>
@@ -431,7 +451,11 @@ export default async function EventDetailPage({
           </div>
         </div>
       )}
+      </>
+      )}
 
+      {section === "schedule" && (
+      <>
       {/* Courses */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Courses</p>
@@ -549,7 +573,11 @@ export default async function EventDetailPage({
           <p className="text-sm text-navy/40">Add a course above before creating rounds.</p>
         )}
       </div>
+      </>
+      )}
 
+      {section === "teams" && (
+      <>
       {/* Teams */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Teams</p>
@@ -666,7 +694,11 @@ export default async function EventDetailPage({
           <p className="text-sm text-navy/40">Every player is already in this event.</p>
         )}
       </div>
+      </>
+      )}
 
+      {section === "draft" && (
+      <>
       {/* Draft */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -811,15 +843,19 @@ export default async function EventDetailPage({
           </div>
         )}
       </div>
+      </>
+      )}
 
-      {/* Delete event */}
-      <DeleteButton
-        action={deleteEvent}
-        fields={{ id: event.id }}
-        confirm={`Delete "${event.name}" and all its teams, rosters, and match data? This cannot be undone.`}
-        label="Delete event"
-        className="text-sm text-usa-red hover:underline"
-      />
+      {/* Delete event — lives on the Details tab */}
+      {section === "details" && (
+        <DeleteButton
+          action={deleteEvent}
+          fields={{ id: event.id }}
+          confirm={`Delete "${event.name}" and all its teams, rosters, and match data? This cannot be undone.`}
+          label="Delete event"
+          className="text-sm text-usa-red hover:underline"
+        />
+      )}
     </div>
   );
 }
