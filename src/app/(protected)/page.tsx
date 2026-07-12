@@ -182,10 +182,10 @@ export default async function Home({
         </p>
       )}
 
-      {/* Propose a bet — quick access to the wizard */}
+      {/* Propose a bet — quick access to the wizard (matches the Bets tab) */}
       <Link href="/bets/new"
-        className="flex items-center justify-center gap-2 rounded-xl border border-gold/60 bg-parchment px-4 py-3 text-sm font-bold text-navy hover:bg-hairline/30 transition-colors">
-        💰 Propose a bet
+        className="block w-full rounded-xl bg-navy py-3.5 text-center text-base font-semibold text-off-white">
+        + Propose a Bet
       </Link>
 
       {/* Your open bets — the ones that need closing out */}
