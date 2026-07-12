@@ -358,9 +358,9 @@ export default async function EventDetailPage({
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
   const draftInputCls = "w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy";
 
-  const section = ["schedule", "teams", "draft"].includes(searchParams.section ?? "")
+  const section = ["teams", "details", "draft"].includes(searchParams.section ?? "")
     ? (searchParams.section as string)
-    : "details";
+    : "schedule";
 
   return (
     <div className="px-4 py-6 space-y-6">
@@ -370,7 +370,7 @@ export default async function EventDetailPage({
 
       {/* Section tabs */}
       <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-        {([["details", "Details"], ["schedule", "Schedule"], ["teams", "Teams"], ["draft", "Draft"]] as const).map(([s, label]) => (
+        {([["schedule", "Schedule"], ["teams", "Teams"], ["details", "Details"], ["draft", "Draft"]] as const).map(([s, label]) => (
           <Link key={s} href={`/admin/events/${params.id}?section=${s}`}
             className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-semibold ${
               section === s ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
