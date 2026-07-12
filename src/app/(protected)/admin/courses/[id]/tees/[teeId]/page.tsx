@@ -83,11 +83,12 @@ export default async function HolesPage({
                       <td key={n} className="px-1 py-1 text-center">
                         <input
                           name={`par_${n}`}
-                          type="number"
-                          min="3" max="5"
-                          defaultValue={holeMap[n]?.par ?? 4}
+                          type="text"
                           inputMode="numeric"
-                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
+                          pattern="[0-9]*"
+                          maxLength={1}
+                          defaultValue={holeMap[n]?.par ?? 4}
+                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy"
                         />
                       </td>
                     ))}
@@ -98,11 +99,12 @@ export default async function HolesPage({
                       <td key={n} className="px-1 py-1 text-center">
                         <input
                           name={`si_${n}`}
-                          type="number"
-                          min="1" max="18"
-                          defaultValue={holeMap[n]?.stroke_index ?? n}
+                          type="text"
                           inputMode="numeric"
-                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
+                          pattern="[0-9]*"
+                          maxLength={2}
+                          defaultValue={holeMap[n]?.stroke_index ?? n}
+                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy"
                         />
                       </td>
                     ))}
