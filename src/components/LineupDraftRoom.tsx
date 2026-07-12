@@ -53,6 +53,8 @@ export interface LineupDraftView {
   currentPickStartedAt: string | null;
   homeTeam: LineupTeam;
   awayTeam: LineupTeam;
+  homeScore: number;
+  awayScore: number;
   firstPickTeamId: string;
   matchups: LineupMatchupView[];
   rosters: Record<string, RosterPlayer[]>;
@@ -79,6 +81,11 @@ function Avatar({ url, name, color, className }: {
 function fmtClock(s: number) {
   const v = Math.max(s, 0);
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
+}
+
+function fmtPts(n: number): string {
+  if (n % 1 === 0.5) return n < 1 ? "½" : `${Math.floor(n)}½`;
+  return String(n);
 }
 
 interface FightData {
@@ -277,49 +284,65 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
   );
 
   // ── The board ───────────────────────────────────────────────────────────
-  // Filled sides get a team-color block with one row per player: photo, name
-  // (full names on TV), and their record this cup. Empty sides stay ghosted.
-  const sideBlock = (s: { p1: SidePlayer | null; p2: SidePlayer | null }, t: LineupTeam) => {
+  // Each card STACKS its two sides (home over away) so names get the full card
+  // width — no more truncation. Rows show photo, name (full on TV), record,
+  // and the strokes that ball gets (the handicap allowance for the match).
+  const strokeArr = (m: LineupMatchupView, sideKey: "home" | "away"): (number | null)[] => {
+    const s = m.strokes;
+    if (!s || s.oneScore) return [];
+    return sideKey === "home" ? [s.home.p1, s.home.p2] : [s.away.p1, s.away.p2];
+  };
+  const teamStroke = (m: LineupMatchupView, sideKey: "home" | "away"): number | null => {
+    const s = m.strokes;
+    if (!s || !s.oneScore) return null;
+    return sideKey === "home" ? s.homeTeam : s.awayTeam;
+  };
+
+  const sideBlock = (
+    s: { p1: SidePlayer | null; p2: SidePlayer | null },
+    t: LineupTeam,
+    strokes: (number | null)[],
+    tStroke: number | null,
+  ) => {
     const players = [s.p1, s.p2].filter(Boolean) as SidePlayer[];
     if (players.length === 0) {
       return (
-        <div className={`flex min-h-full items-center justify-center rounded-lg border border-dashed ${
-          tv ? "border-white/15 py-4" : "border-hairline py-3"
+        <div className={`flex items-center justify-center rounded-lg border border-dashed ${
+          tv ? "border-white/15 py-3" : "border-hairline py-2.5"
         }`}>
-          <span className={tv ? "text-lg text-white/25" : "text-xs text-navy/25"}>—</span>
-        </div>
-      );
-    }
-    if (tv) {
-      // TV rows: record stacked UNDER the full name so long names get the
-      // whole row width instead of fighting a chip for it.
-      return (
-        <div className="space-y-1.5 rounded-lg p-2.5" style={{ backgroundColor: t.color }}>
-          {players.map((p) => (
-            <div key={p.id} className="flex items-center gap-2.5">
-              <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
-                className="h-10 w-10 shrink-0 text-xs ring-1 ring-gold/70" />
-              <div className="min-w-0">
-                <p className="truncate text-lg font-semibold leading-tight text-white">{p.fullName}</p>
-                <p className="text-xs font-bold tabular-nums text-white/65">{p.record}</p>
-              </div>
-            </div>
-          ))}
+          <span className={tv ? "text-lg text-white/25" : "text-xs text-navy/25"}>on the clock…</span>
         </div>
       );
     }
     return (
-      <div className="space-y-1 rounded-lg p-2" style={{ backgroundColor: t.color }}>
-        {players.map((p) => (
-          <div key={p.id} className="flex items-center gap-2">
-            <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
-              className="h-6 w-6 shrink-0 text-[9px] ring-1 ring-gold/70" />
-            <span className="min-w-0 truncate text-xs font-semibold text-white">{p.name}</span>
-            <span className="ml-auto shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-white">
-              {p.record}
-            </span>
-          </div>
-        ))}
+      <div className={`rounded-lg ${tv ? "p-2.5" : "p-2"} space-y-1`} style={{ backgroundColor: t.color }}>
+        {tStroke != null && tStroke > 0 && (
+          <p className={`font-bold uppercase tracking-wide text-white/85 ${tv ? "text-sm" : "text-[10px]"}`}>
+            Team gets +{tStroke}
+          </p>
+        )}
+        {players.map((p, i) => {
+          const st = strokes[i];
+          return (
+            <div key={p.id} className="flex items-center gap-2.5">
+              <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
+                className={`${tv ? "h-9 w-9 text-xs" : "h-6 w-6 text-[9px]"} shrink-0 ring-1 ring-gold/70`} />
+              <div className="min-w-0 flex-1">
+                <p className={`truncate font-semibold leading-tight text-white ${tv ? "text-xl" : "text-xs"}`}>
+                  {tv ? p.fullName : p.name}
+                </p>
+                <p className={`tabular-nums text-white/65 ${tv ? "text-xs" : "text-[9px]"}`}>{p.record}</p>
+              </div>
+              {st != null && st > 0 && (
+                <span className={`shrink-0 rounded-full bg-gold font-bold tabular-nums text-navy ${
+                  tv ? "px-2 py-0.5 text-sm" : "px-1.5 py-0.5 text-[9px]"
+                }`}>
+                  +{st}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -342,18 +365,38 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
                 <p className={`font-bold uppercase tracking-wide text-gold ${tv ? "text-sm" : "text-[9px]"}`}>Set</p>
               )}
             </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 p-2">
-              {sideBlock(m.home, draft.homeTeam)}
-              <span className={`self-center font-display font-bold ${
-                tv ? "text-2xl text-navy/40" : "text-sm text-navy/30"
-              }`}>
-                vs
-              </span>
-              {sideBlock(m.away, draft.awayTeam)}
+            <div className={`space-y-1.5 p-2 ${tv ? "" : ""}`}>
+              {sideBlock(m.home, draft.homeTeam, strokeArr(m, "home"), teamStroke(m, "home"))}
+              <p className={`text-center font-display font-bold ${tv ? "text-lg text-navy/35" : "text-xs text-navy/30"}`}>vs</p>
+              {sideBlock(m.away, draft.awayTeam, strokeArr(m, "away"), teamStroke(m, "away"))}
             </div>
           </div>
         );
       })}
+    </div>
+  );
+
+  // Event scoreboard — team points so far this cup.
+  const showScore = draft.homeScore + draft.awayScore > 0;
+  const scoreboard = showScore && (
+    <div className={tv
+      ? "rounded-2xl border border-white/10 bg-white/5 px-5 py-4"
+      : "rounded-xl border border-hairline bg-white px-4 py-3"}>
+      <p className={`mb-1 text-center font-semibold uppercase tracking-wide ${tv ? "text-sm text-white/45" : "text-[10px] text-navy/40"}`}>
+        Event Score
+      </p>
+      <div className="flex items-center justify-center gap-4">
+        {[draft.homeTeam, draft.awayTeam].map((team, i) => (
+          <div key={team.id} className="flex items-center gap-2">
+            {i === 1 && <span className={tv ? "text-white/30" : "text-navy/30"}>·</span>}
+            <span className={`inline-block rounded-full ${tv ? "h-3 w-3" : "h-2.5 w-2.5"}`} style={{ backgroundColor: team.color }} />
+            <span className={`font-bold tabular-nums ${tv ? "text-3xl text-off-white" : "text-2xl text-navy"}`}>
+              {fmtPts(i === 0 ? draft.homeScore : draft.awayScore)}
+            </span>
+            <span className={`font-semibold ${tv ? "text-base text-white/60" : "text-xs text-navy/50"}`}>{team.name}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -449,6 +492,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
                   <p className="mt-2 text-xl text-navy/70">Round {draft.roundNumber} is ready. 🐉</p>
                 </div>
               )}
+              {scoreboard}
               {benchCard}
             </div>
 
@@ -499,6 +543,8 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
       )}
 
       {error && <p className="rounded-lg bg-usa-red/10 px-3 py-2 text-sm text-usa-red">{error}</p>}
+
+      {scoreboard}
 
       {board}
 

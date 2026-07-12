@@ -97,7 +97,12 @@ export default async function LineupDraftPage({
     if (!pid) return;
     (tally[pid] ??= { w: 0, l: 0, t: 0 })[key] += 1;
   };
+  // Event score (team points so far) for the header scoreboard
+  let homeScore = 0, awayScore = 0;
   for (const m of decided ?? []) {
+    if (m.result === "home") homeScore += 1;
+    else if (m.result === "away") awayScore += 1;
+    else { homeScore += 0.5; awayScore += 0.5; }
     const homeKey = m.result === "home" ? "w" : m.result === "away" ? "l" : "t";
     const awayKey = m.result === "away" ? "w" : m.result === "home" ? "l" : "t";
     bump(m.home_p1_id, homeKey); bump(m.home_p2_id, homeKey);
@@ -219,6 +224,8 @@ export default async function LineupDraftPage({
     currentPickStartedAt: draft.current_pick_started_at,
     homeTeam: { ...homeTeam, captainName: captainName(homeTeam.id) },
     awayTeam: { ...awayTeam, captainName: captainName(awayTeam.id) },
+    homeScore,
+    awayScore,
     firstPickTeamId: draft.first_pick_team_id ?? homeTeam.id,
     matchups,
     rosters,
