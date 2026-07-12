@@ -20,15 +20,14 @@ export async function claimCtp(formData: FormData): Promise<void> {
   const player = await requirePlayer();
   const supabase = createClient();
   const ctpId = formData.get("ctp_id") as string;
-  const day = (formData.get("day") as string) || "";
-  const back = day ? `/matches?day=${encodeURIComponent(day)}` : "/matches";
 
   const { data: ctp } = await supabase
     .from("ctp_holes")
     .select("id, hole_number, holder_participant_id, rounds(id, event_id, round_number)")
     .eq("id", ctpId).single();
   const round = (ctp?.rounds ?? null) as unknown as { id: string; event_id: string; round_number: number } | null;
-  if (!ctp || !round) { failTo(back, { message: "CTP hole not found." }); return; }
+  const back = round ? `/matches?round=${round.id}` : "/matches";
+  if (!ctp || !round) { failTo("/matches", { message: "CTP hole not found." }); return; }
 
   const { data: me } = await supabase
     .from("event_participants")

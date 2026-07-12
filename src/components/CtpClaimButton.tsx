@@ -13,11 +13,9 @@ const HOLD_MS = 1200;
  */
 export function CtpClaimButton({
   ctpId,
-  day,
   holeNumber,
 }: {
   ctpId: string;
-  day: string;
   holeNumber: number;
 }) {
   const [progress, setProgress] = useState(0); // 0..1
@@ -39,7 +37,6 @@ export function CtpClaimButton({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("ctp_id", ctpId);
-      fd.set("day", day);
       await claimCtp(fd);
       fired.current = false;
     });

@@ -42,6 +42,7 @@ export async function MatchScorecard({
   defaultHcpOpen = true,
   reviewHref,
   cardHref,
+  hbhHref,
 }: {
   matchupId: string;
   currentPath: string;   // clean path (no query) — used for revalidation
@@ -52,6 +53,7 @@ export async function MatchScorecard({
   defaultHcpOpen?: boolean;
   reviewHref?: string;   // where "Save & Review" lands (default: currentPath?review=1)
   cardHref?: string;     // where "Back to scorecard" from review lands (default: currentPath)
+  hbhHref?: string;      // the easy tap-to-score view (hole-by-hole)
 }) {
   const supabase = createClient();
 
@@ -265,14 +267,22 @@ export async function MatchScorecard({
       </Link>
 
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-display font-bold text-navy">
-          Match {matchup.match_number} Scorecard
-        </h1>
-        <p className="text-xs text-navy/50 mt-0.5">
-          {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
-          {sideLabel[round.side]} · {fmt.name}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-display font-bold text-navy">
+            Match {matchup.match_number} Scorecard
+          </h1>
+          <p className="text-xs text-navy/50 mt-0.5">
+            {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
+            {sideLabel[round.side]} · {fmt.name}
+          </p>
+        </div>
+        {hbhHref && !reviewing && (
+          <Link href={hbhHref}
+            className="shrink-0 rounded-full border border-hairline bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-parchment">
+            ⚡ Tap-to-score
+          </Link>
+        )}
       </div>
 
       {/* Dedicated review + confirm screen */}

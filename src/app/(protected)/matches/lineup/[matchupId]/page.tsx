@@ -13,12 +13,11 @@ export default async function LineupPage({
   searchParams,
 }: {
   params: { matchupId: string };
-  searchParams: { side?: string; day?: string };
+  searchParams: { side?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
   const side = searchParams.side === "away" ? "away" : "home";
-  const backHref = searchParams.day ? `/matches?day=${encodeURIComponent(searchParams.day)}` : "/matches";
   const supabase = createClient();
 
   const { data: matchupRaw } = await supabase
@@ -32,6 +31,9 @@ export default async function LineupPage({
     away_p1_id: string | null; away_p2_id: string | null;
   } | null;
   if (!matchup) redirect("/matches");
+
+  // Return to the matchup's round tab on /matches
+  const backHref = `/matches?round=${matchup.round_id}`;
 
   const { data: roundRaw } = await supabase
     .from("rounds")

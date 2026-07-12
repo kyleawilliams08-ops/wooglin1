@@ -21,6 +21,7 @@ export default async function AdminScorecardPage({
       backLabel="Matchups"
       viewer={player}
       reviewing={searchParams.review === "1"}
+      hbhHref={`/live/match/${params.matchupId}`}
     />
   );
 }

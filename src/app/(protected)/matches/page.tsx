@@ -30,17 +30,12 @@ function fmtTeeTime(t: string | null): string | null {
   return `${hr}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function dayLabel(dateStr: string): string {
-  const d = new Date(`${dateStr}T12:00:00`);
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-// The one matches board: team totals, day tabs, and phase-aware cards —
+// The one matches board: team totals, round tabs, and phase-aware cards —
 // tee time → captain lineup pickers → live standing → final result.
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: { day?: string; round?: string; error?: string };
+  searchParams: { round?: string; error?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
@@ -281,28 +276,16 @@ export default async function MatchesPage({
   const totalMatches = matchups.length;
   const toWin = totalMatches > 0 ? totalMatches / 2 + 0.5 : null;
 
-  // ── Day tabs ───────────────────────────────────────────────────────────────
-
-  type Day = { key: string; label: string; rounds: typeof rounds };
-  const days: Day[] = [];
-  for (const r of rounds) {
-    const key = r.played_at ?? `round-${r.id}`;
-    const label = r.played_at ? dayLabel(r.played_at) : (r.name ?? `Round ${r.round_number}`);
-    const existing = days.find((d) => d.key === key);
-    if (existing) existing.rounds.push(r);
-    else days.push({ key, label, rounds: [r] });
-  }
+  // ── Round tabs ───────────────────────────────────────────────────────────
+  // One round per tab (names already carry the day, e.g. "Thurs AM"); default
+  // to today's round if there is one, else the first.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // YYYY-MM-DD
-  const selectedDay =
-    days.find((d) => d.key === searchParams.day) ??
-    days.find((d) => d.key === today) ??
-    days[0];
-  const dayQ = selectedDay ? `&day=${encodeURIComponent(selectedDay.key)}` : "";
-
-  // Within a day, one round at a time (a day can hold two rounds — Thu AM/PM)
-  const selectedRound = selectedDay
-    ? (selectedDay.rounds.find((r) => r.id === searchParams.round) ?? selectedDay.rounds[0])
-    : null;
+  const selectedRound =
+    rounds.find((r) => r.id === searchParams.round) ??
+    rounds.find((r) => r.played_at === today) ??
+    rounds[0] ?? null;
+  const roundLabel = (r: (typeof rounds)[number]) =>
+    r.name ? `R${r.round_number} · ${r.name}` : `Round ${r.round_number}`;
 
   const names = (a: EPRef, b: EPRef) =>
     [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
@@ -313,7 +296,15 @@ export default async function MatchesPage({
 
       {/* Sticky team totals */}
       <div className="sticky top-0 z-10 bg-navy px-4 pt-5 pb-4 text-center shadow-md">
-        <p className="text-white/50 text-xs uppercase tracking-widest">{event.name}</p>
+        {admin ? (
+          <Link href={`/admin/events/${eventId}`}
+            className="inline-flex items-center gap-1.5 text-white/50 text-xs uppercase tracking-widest hover:text-white/90">
+            {event.name}
+            <span aria-hidden className="text-gold">⚙ Manage</span>
+          </Link>
+        ) : (
+          <p className="text-white/50 text-xs uppercase tracking-widest">{event.name}</p>
+        )}
         <div className="mt-2 grid grid-cols-3 items-center">
           <div>
             {/* off-white on navy for legibility (a team whose color IS navy
@@ -376,39 +367,20 @@ export default async function MatchesPage({
           </p>
         )}
 
-        {/* Day tabs */}
-        {days.length > 1 && (
+        {/* Round tabs */}
+        {rounds.length > 1 && (
           <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-            {days.map((d) => (
+            {rounds.map((r) => (
               <Link
-                key={d.key}
-                href={`/matches?day=${encodeURIComponent(d.key)}`}
+                key={r.id}
+                href={`/matches?round=${r.id}`}
                 className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold border transition-colors ${
-                  d.key === selectedDay?.key
+                  r.id === selectedRound?.id
                     ? "bg-navy text-off-white border-navy"
                     : "bg-white text-navy/60 border-hairline"
                 }`}
               >
-                {d.label}
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {/* Round tabs (within the selected day) */}
-        {selectedDay && selectedDay.rounds.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-            {selectedDay.rounds.map((r) => (
-              <Link
-                key={r.id}
-                href={`/matches?day=${encodeURIComponent(selectedDay.key)}&round=${r.id}`}
-                className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold border transition-colors ${
-                  r.id === selectedRound?.id
-                    ? "bg-gold/20 text-navy border-gold"
-                    : "bg-white text-navy/50 border-hairline"
-                }`}
-              >
-                R{r.round_number}{r.name ? ` · ${r.name}` : ""}
+                {roundLabel(r)}
               </Link>
             ))}
           </div>
@@ -461,47 +433,6 @@ export default async function MatchesPage({
                 return null;
               })()}
 
-              {/* Closest to the Pin: current holder + tap-to-claim */}
-              {(() => {
-                const roundCtp = ctpHoles.filter((c) => c.round_id === round.id);
-                if (roundCtp.length === 0) return null;
-                const roundDone = ms.length > 0 && ms.every((m) => stateById[m.id]?.final);
-                return roundCtp.map((c) => {
-                  const holderName = c.holder
-                    ? c.holder.players?.nickname ?? c.holder.display_name
-                    : null;
-                  const chain = chainByCtp.get(c.id) ?? [];
-                  return (
-                    <div key={c.id}
-                      className="rounded-xl border border-gold/50 bg-parchment px-3 py-2 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm text-navy">
-                        🎯 <span className="font-bold">CTP · #{c.hole_number}</span>
-                        {c.stake != null && (
-                          <span className="ml-1.5 rounded-full bg-gold/25 px-1.5 py-0.5 text-[10px] font-bold text-navy/70">
-                            ${Number(c.stake)}
-                          </span>
-                        )}
-                        {holderName ? (
-                          <span> — <span className="font-semibold">{holderName}</span>{roundDone ? " 🏆" : ""}</span>
-                        ) : (
-                          <span className="text-navy/50"> — unclaimed</span>
-                        )}
-                      </p>
-                      {viewerInField && !roundDone && (
-                        <CtpClaimButton ctpId={c.id} day={selectedDay?.key ?? ""} holeNumber={c.hole_number} />
-                      )}
-                      </div>
-                      {chain.length > 1 && (
-                        <p className="truncate text-[11px] text-navy/45">
-                          {chain.join(" → ")}
-                        </p>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-
               {ms.length === 0 ? (
                 <p className="text-xs text-navy/40">
                   Pairings not set yet.{admin ? " Use Manage to create the matches." : ""}
@@ -547,7 +478,7 @@ export default async function MatchesPage({
                         <div className="relative z-10 flex gap-2 border-t border-hairline pt-2">
                           {canEditHome && (
                             <Link
-                              href={`/matches/lineup/${m.id}?side=home${dayQ}`}
+                              href={`/matches/lineup/${m.id}?side=home`}
                               className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
                                 m.home_p1_id ? "border border-hairline text-navy/60" : "text-white"
                               }`}
@@ -558,7 +489,7 @@ export default async function MatchesPage({
                           )}
                           {canEditAway && (
                             <Link
-                              href={`/matches/lineup/${m.id}?side=away${dayQ}`}
+                              href={`/matches/lineup/${m.id}?side=away`}
                               className={`flex-1 rounded-lg py-2 text-center text-xs font-semibold ${
                                 m.away_p1_id ? "border border-hairline text-navy/60" : "text-white"
                               }`}
@@ -576,6 +507,47 @@ export default async function MatchesPage({
                   );
                 })
               )}
+
+              {/* Closest to the Pin — at the bottom of the round */}
+              {(() => {
+                const roundCtp = ctpHoles.filter((c) => c.round_id === round.id);
+                if (roundCtp.length === 0) return null;
+                const roundDone = ms.length > 0 && ms.every((m) => stateById[m.id]?.final);
+                return roundCtp.map((c) => {
+                  const holderName = c.holder
+                    ? c.holder.players?.nickname ?? c.holder.display_name
+                    : null;
+                  const chain = chainByCtp.get(c.id) ?? [];
+                  return (
+                    <div key={c.id}
+                      className="rounded-xl border border-gold/50 bg-parchment px-3 py-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm text-navy">
+                        🎯 <span className="font-bold">CTP · #{c.hole_number}</span>
+                        {c.stake != null && (
+                          <span className="ml-1.5 rounded-full bg-gold/25 px-1.5 py-0.5 text-[10px] font-bold text-navy/70">
+                            ${Number(c.stake)}
+                          </span>
+                        )}
+                        {holderName ? (
+                          <span> — <span className="font-semibold">{holderName}</span>{roundDone ? " 🏆" : ""}</span>
+                        ) : (
+                          <span className="text-navy/50"> — unclaimed</span>
+                        )}
+                      </p>
+                      {viewerInField && !roundDone && (
+                        <CtpClaimButton ctpId={c.id} holeNumber={c.hole_number} />
+                      )}
+                      </div>
+                      {chain.length > 1 && (
+                        <p className="truncate text-[11px] text-navy/45">
+                          {chain.join(" → ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           );
         })}

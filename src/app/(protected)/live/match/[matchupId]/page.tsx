@@ -44,6 +44,7 @@ export default async function LiveMatchPage({
           defaultHcpOpen={false}
           reviewHref={`${currentPath}?view=card&review=1`}
           cardHref={`${currentPath}?view=card`}
+          hbhHref={currentPath}
         />
       </>
     );
