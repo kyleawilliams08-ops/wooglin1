@@ -70,14 +70,19 @@ export default async function Home({
       b.bet_participants.some((p) => p.player_id === player.id))
     .sort((a, b) => (a.status === "protested" ? 0 : 1) - (b.status === "protested" ? 0 : 1));
 
-  // Draft day: feature the draft prominently while it's scheduled or live
+  // Draft day: feature the roster draft while scheduled/live — but only in the
+  // pre-event window. Once the event is active/complete the draft is over, so
+  // don't keep promoting a draft that's merely stuck on 'live'.
   const { data: upcomingDrafts } = await supabase
     .from("drafts")
-    .select("id, status, scheduled_at, events(year)")
+    .select("id, status, scheduled_at, events(year, status)")
     .in("status", ["scheduled", "live"])
     .order("created_at", { ascending: false })
-    .limit(1);
-  const draft = upcomingDrafts?.[0] ?? null;
+    .limit(5);
+  const draft = (upcomingDrafts ?? []).find((d) => {
+    const ev = d.events as unknown as { year: number; status: string } | null;
+    return ev && ev.status !== "active" && ev.status !== "complete";
+  }) ?? null;
   const draftYear = (draft?.events as unknown as { year: number } | null)?.year;
 
   const { data: results } = await supabase
@@ -156,24 +161,32 @@ export default async function Home({
         </Link>
       )}
 
-      {/* Active event hero */}
+      {/* Active event — compact (Matches lives in the bottom nav) */}
       {activeEvent ? (
-        <Link href="/matches" className="block rounded-2xl bg-navy p-5 relative overflow-hidden">
-          <span className="absolute top-4 right-4 text-[10px] font-bold tracking-widest uppercase text-navy bg-gold rounded-full px-2.5 py-1">
-            Live
+        <Link href="/matches" className="flex items-center justify-between gap-3 rounded-xl border border-hairline bg-white px-4 py-3 hover:bg-parchment transition-colors">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-navy/40">Active Event</p>
+            <p className="truncate font-semibold text-navy">{activeEvent.name}</p>
+            <p className="truncate text-xs text-navy/50">
+              {activeEvent.location}{activeEvent.location ? " · " : ""}{activeEvent.year}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-navy">Live</span>
+            <span className="text-navy/30">›</span>
           </span>
-          <p className="text-xs text-hairline/60 uppercase tracking-widest mb-1">Active Event</p>
-          <p className="text-xl font-display font-bold text-off-white">{activeEvent.name}</p>
-          <p className="text-sm text-hairline mt-1">
-            {activeEvent.location}{activeEvent.location ? " · " : ""}{activeEvent.year}
-          </p>
-          <p className="mt-4 text-sm font-semibold text-gold">Matches &amp; live scoring →</p>
         </Link>
       ) : (
-        <div className="rounded-2xl bg-navy p-5">
-          <p className="text-sm text-hairline">No active event — the off-season is for practicing your excuses.</p>
-        </div>
+        <p className="rounded-xl border border-hairline bg-white px-4 py-3 text-sm text-navy/50">
+          No active event — the off-season is for practicing your excuses.
+        </p>
       )}
+
+      {/* Propose a bet — quick access to the wizard */}
+      <Link href="/bets/new"
+        className="flex items-center justify-center gap-2 rounded-xl border border-gold/60 bg-parchment px-4 py-3 text-sm font-bold text-navy hover:bg-hairline/30 transition-colors">
+        💰 Propose a bet
+      </Link>
 
       {/* Your open bets — the ones that need closing out */}
       {myOpenBets.length > 0 && (
