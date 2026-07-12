@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { BetFilter } from "@/components/BetFilter";
+import { LedgerList } from "@/components/LedgerList";
 import { failTo } from "@/lib/actionError";
 import { recordBetClosed, recordBetProtest } from "@/lib/feed";
 import { ledgerNets, fmtMoney, fmtNet } from "@/lib/bets";
@@ -65,7 +67,7 @@ async function getBet(supabase: ReturnType<typeof createClient>, betId: string) 
 export default async function BetsPage({
   searchParams,
 }: {
-  searchParams: { error?: string; who?: string; status?: string };
+  searchParams: { error?: string; who?: string; status?: string; tab?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
@@ -105,13 +107,14 @@ export default async function BetsPage({
   const visible = bets.filter(
     (b) => b.status !== "void" && !attentionIds.has(b.id) && statusMatch(b) && (who === "me" ? mine(b) : true),
   );
-  const flt = (w: string, s: string) => `/bets?who=${w}&status=${s}`;
+  const tab = searchParams.tab === "history" ? "history" : "ledger";
 
   const totals = ledgerNets(bets.map((b) => ({ ...b, amount: Number(b.amount) })));
   const myNet = totals.get(player.id) ?? 0;
   const ledger = Array.from(totals.entries())
     .filter(([pid]) => labelOf.has(pid))
-    .sort((a, b) => b[1] - a[1]);
+    .sort((a, b) => b[1] - a[1])
+    .map(([pid, net]) => ({ id: pid, name: labelOf.get(pid) ?? "?", net }));
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -445,11 +448,11 @@ export default async function BetsPage({
 
       <ErrorBanner message={searchParams.error} />
 
-      {/* Needs your action — protests + open bets, one-tap close-out */}
+      {/* Open action — protests + open bets you can close, one tap */}
       {attention.length > 0 && (
         <div className="rounded-2xl border border-gold/60 bg-parchment p-3 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy/60">
-            ⚡ Needs your action ({attention.length})
+            ⚡ Open Action ({attention.length})
           </p>
           {attention.map((b) => <BetCard key={b.id} b={b} />)}
         </div>
@@ -460,59 +463,47 @@ export default async function BetsPage({
         + Propose a Bet
       </Link>
 
-      {/* Browse the rest */}
-      <div>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex gap-1.5">
-            {([["all", "All bets"], ["me", "My bets"]] as const).map(([w, label]) => (
-              <Link key={w} href={flt(w, statusF)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  who === w ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
-                }`}>
-                {label}
-              </Link>
-            ))}
-          </div>
-          <div className="flex gap-1.5">
-            {([["all", "All"], ["open", "Open"], ["settled", "Settled"], ["protested", "⚠️"]] as const).map(([s, label]) => (
-              <Link key={s} href={flt(who, s)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                  statusF === s ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
-                }`}>
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
-        {visible.length === 0 ? (
-          <p className="text-sm text-navy/50">Nothing here yet.</p>
-        ) : (
-          <div className="space-y-2">{visible.map((b) => <BetCard key={b.id} b={b} />)}</div>
-        )}
+      {/* Ledger / History tabs — one at a time */}
+      <div className="flex gap-2">
+        {([["ledger", "Ledger"], ["history", "History"]] as const).map(([t, label]) => (
+          <Link key={t} href={`/bets?tab=${t}`}
+            className={`flex-1 rounded-full border px-4 py-2 text-center text-sm font-semibold ${
+              tab === t ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
+            }`}>
+            {label}
+          </Link>
+        ))}
       </div>
 
-      {/* Ledger */}
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-navy/50">{year} Ledger</p>
-        {ledger.length === 0 ? (
-          <p className="text-sm text-navy/50">No settled bets yet.</p>
+      {tab === "ledger" ? (
+        ledger.length === 0 ? (
+          <p className="text-sm text-navy/50">No bets yet — nothing to settle.</p>
         ) : (
-          <div className="rounded-xl border border-hairline bg-white divide-y divide-hairline">
-            {ledger.map(([pid, net]) => (
-              <Link key={pid} href={`/bets/player/${pid}`}
-                className="flex items-center justify-between px-4 py-2.5 hover:bg-parchment transition-colors">
-                <span className="text-sm font-semibold text-navy">{labelOf.get(pid)}</span>
-                <span className="flex items-center gap-2">
-                  <span className={`text-sm font-bold tabular-nums ${net > 0 ? "text-europe-green" : net < 0 ? "text-usa-red" : "text-navy/50"}`}>
-                    {fmtNet(net)}
-                  </span>
-                  <span className="text-navy/25">›</span>
-                </span>
-              </Link>
-            ))}
+          <LedgerList entries={ledger} />
+        )
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy/50">
+              {who === "me" ? "Your bets" : "All bets"}
+              {statusF !== "all" ? ` · ${statusF}` : ""}
+            </p>
+            <span className="flex items-center gap-3">
+              {(who !== "all" || statusF !== "all") && (
+                <Link href="/bets?tab=history" className="text-[11px] font-semibold text-navy/50 underline underline-offset-2">
+                  Clear
+                </Link>
+              )}
+              <BetFilter />
+            </span>
           </div>
-        )}
-      </div>
+          {visible.length === 0 ? (
+            <p className="text-sm text-navy/50">No bets match these filters.</p>
+          ) : (
+            <div className="space-y-2">{visible.map((b) => <BetCard key={b.id} b={b} />)}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
