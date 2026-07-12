@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { ConfirmForm } from "@/components/ConfirmForm";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { startLineupDraft } from "@/lib/lineupDraftActions";
@@ -13,7 +14,7 @@ export default async function MatchupsPage({
   searchParams,
 }: {
   params: { id: string; roundId: string };
-  searchParams: { error?: string };
+  searchParams: { error?: string; copied?: string };
 }) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
@@ -22,12 +23,12 @@ export default async function MatchupsPage({
 
   const { data: roundRaw } = await supabase
     .from("rounds")
-    .select("id, round_number, name, side, formats(id, name), course_tees(tee_name, courses(name))")
+    .select("id, round_number, name, side, formats(id, name, team_size), course_tees(tee_name, courses(name))")
     .eq("id", params.roundId)
     .single();
   const round = roundRaw as unknown as {
     id: string; round_number: number; name: string | null; side: string;
-    formats: { id: string; name: string } | null;
+    formats: { id: string; name: string; team_size: number | null } | null;
     course_tees: { tee_name: string; courses: { name: string } | null } | null;
   } | null;
   if (!round) redirect(`/admin/events/${params.id}`);
@@ -92,6 +93,29 @@ export default async function MatchupsPage({
   const roundUnderway = matchups.some((m) => m.status !== "pending");
   const canDraft = matchups.length >= 1 && !roundUnderway && !!homeTeam && !!awayTeam;
 
+  // Copy targets: other rounds of the same side-size that aren't underway, so
+  // Thursday's pairings can be applied to Thursday's second round in one tap.
+  const sourceTeamSize = round.formats?.team_size ?? null;
+  const { data: otherRoundsRaw } = await supabase
+    .from("rounds")
+    .select("id, round_number, name, formats(team_size)")
+    .eq("event_id", params.id)
+    .neq("id", params.roundId)
+    .order("round_number");
+  const otherRounds = (otherRoundsRaw ?? []) as unknown as {
+    id: string; round_number: number; name: string | null; formats: { team_size: number | null } | null;
+  }[];
+  const otherIds = otherRounds.map((r) => r.id);
+  const { data: otherMatchupStatuses } = otherIds.length > 0
+    ? await supabase.from("matchups").select("round_id, status").in("round_id", otherIds)
+    : { data: [] as { round_id: string; status: string }[] };
+  const underwayRoundIds = new Set(
+    (otherMatchupStatuses ?? []).filter((m) => m.status !== "pending").map((m) => m.round_id),
+  );
+  const copyTargets = otherRounds.filter(
+    (r) => (r.formats?.team_size ?? null) === sourceTeamSize && !underwayRoundIds.has(r.id),
+  );
+
   // ── Server actions ──────────────────────────────────────────
 
   async function addMatchup(formData: FormData) {
@@ -137,6 +161,50 @@ export default async function MatchupsPage({
     const { error } = await supabase.from("matchups").delete().eq("id", formData.get("matchup_id") as string);
     failTo(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`, error);
     revalidatePath(`/admin/events/${params.id}/rounds/${params.roundId}/matchups`);
+  }
+
+  // Apply this round's pairings to another round (e.g. Thursday AM → PM).
+  // Maps by match_number: updates a matching slot, or creates it if missing.
+  async function copyPairings(formData: FormData) {
+    "use server";
+    const me = await requirePlayer();
+    if (!isAdmin(me)) redirect("/");
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+    const targetId = formData.get("target_round_id") as string;
+    if (!targetId) { failTo(path, { message: "Pick a round to copy into." }); return; }
+
+    const { data: src } = await supabase
+      .from("matchups")
+      .select("match_number, home_p1_id, home_p2_id, away_p1_id, away_p2_id")
+      .eq("round_id", params.roundId).order("match_number");
+    if (!src || src.length === 0) { failTo(path, { message: "No pairings here to copy." }); return; }
+
+    const { data: tgt } = await supabase
+      .from("matchups").select("id, match_number, status").eq("round_id", targetId);
+    if ((tgt ?? []).some((m) => m.status !== "pending")) {
+      failTo(path, { message: "That round is underway — can't overwrite its lineups." });
+      return;
+    }
+    const tgtByNum = new Map((tgt ?? []).map((m) => [m.match_number, m]));
+
+    for (const m of src) {
+      const sides = {
+        home_p1_id: m.home_p1_id, home_p2_id: m.home_p2_id,
+        away_p1_id: m.away_p1_id, away_p2_id: m.away_p2_id,
+      };
+      const existing = tgtByNum.get(m.match_number);
+      const { error } = existing
+        ? await supabase.from("matchups").update(sides).eq("id", existing.id)
+        : await supabase.from("matchups").insert({ round_id: targetId, match_number: m.match_number, ...sides });
+      failTo(path, error);
+    }
+
+    const { data: tRound } = await supabase.from("rounds").select("round_number").eq("id", targetId).single();
+    revalidatePath(path);
+    revalidatePath(`/admin/events/${params.id}/rounds/${targetId}/matchups`);
+    revalidatePath("/matches");
+    redirect(`${path}?copied=${tRound?.round_number ?? ""}`);
   }
 
   async function startLineupDraftAction(formData: FormData) {
@@ -207,6 +275,11 @@ export default async function MatchupsPage({
         ← {round.name ?? `Round ${round.round_number}`}
       </Link>
       <ErrorBanner message={searchParams.error} />
+      {searchParams.copied && (
+        <p className="rounded-lg bg-europe-green/10 px-3 py-2 text-sm font-semibold text-europe-green">
+          ✓ Pairings copied to Round {searchParams.copied}.
+        </p>
+      )}
 
       <div>
         <h1 className="text-2xl font-display font-bold text-navy">
@@ -218,6 +291,32 @@ export default async function MatchupsPage({
           {sideLabel[round.side]} · {round.formats?.name}
         </p>
       </div>
+
+      {/* Copy pairings to another round (same side-size, not underway) */}
+      {matchups.length > 0 && copyTargets.length > 0 && (
+        <ConfirmForm
+          action={copyPairings}
+          confirm="Copy these pairings into the selected round? It overwrites that round's current lineups."
+          className="flex items-center gap-2 rounded-xl border border-hairline bg-white p-4"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-navy text-sm">Copy pairings to…</p>
+            <p className="text-xs text-navy/50">Apply this round&rsquo;s lineups to another round (e.g. Thursday AM → PM).</p>
+            <select name="target_round_id" required defaultValue=""
+              className="mt-2 w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+              <option value="" disabled>Choose a round…</option>
+              {copyTargets.map((r) => (
+                <option key={r.id} value={r.id}>
+                  Round {r.round_number}{r.name ? ` · ${r.name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className="shrink-0 self-end rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-off-white">
+            Copy
+          </button>
+        </ConfirmForm>
+      )}
 
       {/* Lineup Draft */}
       <div className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
