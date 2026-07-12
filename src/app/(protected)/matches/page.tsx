@@ -40,7 +40,7 @@ function dayLabel(dateStr: string): string {
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: { day?: string; error?: string };
+  searchParams: { day?: string; round?: string; error?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
@@ -299,6 +299,11 @@ export default async function MatchesPage({
     days[0];
   const dayQ = selectedDay ? `&day=${encodeURIComponent(selectedDay.key)}` : "";
 
+  // Within a day, one round at a time (a day can hold two rounds — Thu AM/PM)
+  const selectedRound = selectedDay
+    ? (selectedDay.rounds.find((r) => r.id === searchParams.round) ?? selectedDay.rounds[0])
+    : null;
+
   const names = (a: EPRef, b: EPRef) =>
     [a?.display_name, b?.display_name].filter(Boolean).join(" / ") || "TBD";
 
@@ -311,10 +316,15 @@ export default async function MatchesPage({
         <p className="text-white/50 text-xs uppercase tracking-widest">{event.name}</p>
         <div className="mt-2 grid grid-cols-3 items-center">
           <div>
-            <p className="text-4xl font-bold tabular-nums" style={{ color: homeTeam?.color ?? "#fff" }}>
+            {/* off-white on navy for legibility (a team whose color IS navy
+                would vanish); the ringed color dot carries team identity */}
+            <p className="text-4xl font-bold tabular-nums text-off-white">
               {fmtPts(homeTotal)}
             </p>
-            <p className="text-white/70 text-sm font-semibold mt-0.5">{homeLabel}</p>
+            <p className="mt-0.5 flex items-center justify-center gap-1.5 text-white/70 text-sm font-semibold">
+              <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-white/50" style={{ backgroundColor: homeTeam?.color }} />
+              {homeLabel}
+            </p>
           </div>
           <div className="text-white/40 text-xs">
             {toWin != null && (
@@ -325,10 +335,13 @@ export default async function MatchesPage({
             )}
           </div>
           <div>
-            <p className="text-4xl font-bold tabular-nums" style={{ color: awayTeam?.color ?? "#fff" }}>
+            <p className="text-4xl font-bold tabular-nums text-off-white">
               {fmtPts(awayTotal)}
             </p>
-            <p className="text-white/70 text-sm font-semibold mt-0.5">{awayLabel}</p>
+            <p className="mt-0.5 flex items-center justify-center gap-1.5 text-white/70 text-sm font-semibold">
+              <span className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-white/50" style={{ backgroundColor: awayTeam?.color }} />
+              {awayLabel}
+            </p>
           </div>
         </div>
       </div>
@@ -382,7 +395,26 @@ export default async function MatchesPage({
           </div>
         )}
 
-        {selectedDay?.rounds.map((round) => {
+        {/* Round tabs (within the selected day) */}
+        {selectedDay && selectedDay.rounds.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+            {selectedDay.rounds.map((r) => (
+              <Link
+                key={r.id}
+                href={`/matches?day=${encodeURIComponent(selectedDay.key)}&round=${r.id}`}
+                className={`shrink-0 rounded-full px-3.5 py-1 text-xs font-semibold border transition-colors ${
+                  r.id === selectedRound?.id
+                    ? "bg-gold/20 text-navy border-gold"
+                    : "bg-white text-navy/50 border-hairline"
+                }`}
+              >
+                R{r.round_number}{r.name ? ` · ${r.name}` : ""}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {(selectedRound ? [selectedRound] : []).map((round) => {
           const ms = matchups.filter((m) => m.round_id === round.id);
           const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
           return (
@@ -405,6 +437,7 @@ export default async function MatchesPage({
               {(() => {
                 const draftStatus = lineupDraftByRound.get(round.id);
                 const roundUnderway = ms.some((m) => stateById[m.id]?.underway || stateById[m.id]?.final);
+                const lineupsSet = ms.length > 0 && ms.every((m) => m.home_p1 && m.away_p1);
                 if (draftStatus === "live") {
                   return (
                     <Link
@@ -416,7 +449,7 @@ export default async function MatchesPage({
                     </Link>
                   );
                 }
-                if (admin && ms.length > 0 && !roundUnderway && homeTeam && awayTeam) {
+                if (admin && ms.length > 0 && !roundUnderway && !lineupsSet && homeTeam && awayTeam) {
                   return (
                     <StartLineupDraftButton
                       roundId={round.id}
