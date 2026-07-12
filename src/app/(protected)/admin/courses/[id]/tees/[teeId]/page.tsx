@@ -44,6 +44,7 @@ export default async function HolesPage({
       failTo(`/admin/courses/${params.id}/tees/${params.teeId}`, error);
     }
     revalidatePath(`/admin/courses/${params.id}/tees/${params.teeId}`);
+    redirect(`/admin/courses/${params.id}/tees/${params.teeId}?saved=1`);
   }
 
   const holeMap = Object.fromEntries((holes ?? []).map((h) => [h.hole_number, h]));

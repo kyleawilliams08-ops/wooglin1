@@ -2,6 +2,8 @@ import { requirePlayer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { BottomNav } from "@/components/BottomNav";
 import { AlertOverlay } from "@/components/AlertOverlay";
+import { SavedToast } from "@/components/SavedToast";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -46,6 +48,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       </main>
       <BottomNav />
       <AlertOverlay alerts={pendingAlerts} />
+      <Suspense fallback={null}>
+        <SavedToast />
+      </Suspense>
     </div>
   );
 }

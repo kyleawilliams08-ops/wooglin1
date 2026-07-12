@@ -29,6 +29,7 @@ npx tsc --noEmit     # typecheck
 - **Seeds must be keyed by NICKNAME, never email** — admins edit emails to real addresses; email-keyed upserts resurrect placeholder duplicates.
 - **TEST DATA WARNING**: user-entered events ("Test1", "Test 2 - Pinehurst") and their matchups/scores/teams are throwaway — never infer real-world facts from them. Real truth: migrations seeds, `player_appearances` + `event_results` (verified backfill), and Kyle.
 - Surface every DB write failure: capture `{ error }` and use `failTo()` (`src/lib/actionError.ts`) + `<ErrorBanner>`, or throw. No silent failures.
+- **Save confirmation**: a "save & stay" server action should end with `redirect(\`${path}?saved=1\`)` — the global `<SavedToast>` (mounted in the protected layout) shows a transient "✓ Saved" and strips the param. Prefer this over silent revalidate for user-facing saves.
 - Verified real facts: USA won 2025 at Pinehurst (Ryan © USA); all-time Europe 7 – USA 5.
 
 ## Auth (settled after much pain — do not regress)
