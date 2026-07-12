@@ -90,10 +90,16 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                   />
                 </label>
                 <div className="min-w-0">
-                  <p className="truncate font-semibold text-navy">{p.name}</p>
+                  <p className="flex items-center gap-2">
+                    <span className="truncate font-semibold text-navy">{p.name}</span>
+                    {(p.role === "admin" || p.role === "assistant") && (
+                      <span className="shrink-0 rounded-full bg-navy px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-off-white">
+                        Admin
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-navy/50">
                     {p.current_index != null ? `Index ${formatHcp(p.current_index)}` : "No index"}
-                    {(p.role === "admin" || p.role === "assistant") ? " · Admin" : ""}
                   </p>
                   <p className="truncate text-xs text-navy/40">{p.email}</p>
                 </div>
