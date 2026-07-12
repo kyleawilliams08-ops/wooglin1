@@ -1380,3 +1380,14 @@ end $$;
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
   check (kind in ('hole','match_final','standings','lineup','bet','draft','ctp'));
+
+-- ============================================================
+-- CTP stakes: optional dollar value that settles into the betting ledger
+-- ============================================================
+
+-- Admin can attach a per-player stake when setting up a CTP hole. Settling
+-- ("Post to ledger" on the round admin page) creates an already-closed group
+-- bet — everyone who played the round is in, holder wins the pot — and
+-- bet_id remembers it so a hole can't be posted twice.
+alter table ctp_holes add column if not exists stake numeric(8,2) check (stake is null or stake > 0);
+alter table ctp_holes add column if not exists bet_id uuid references bets(id) on delete set null;

@@ -66,7 +66,7 @@ drafts(id, event_id UNIQUE, status[scheduled/live/complete], scheduled_at, first
 draft_picks(draft_id, pick_number, team_id, participant_id, picked_by)  -- unique (draft,pick_number)+(draft,participant); each pick writes event_participants.team_id, so draft completion = rosters set
 lineup_drafts(id, round_id UNIQUE, status[scheduled/live/complete], first_pick_team_id, pick_seconds, current_pick_started_at)  -- optional per-round snake draft that fills a round's matchups
 lineup_draft_picks(draft_id, pick_number, team_id, matchup_id, side[home/away], p1_id, p2_id?, picked_by)  -- each pick writes matchups.{side}_p1/p2, so completion = round lineups set
-ctp_holes(id, round_id, hole_number, holder_participant_id?, holder_set_at, holder_set_by)  -- unique (round,hole); CTP holes; current holder only (king-of-the-hill claims)
+ctp_holes(id, round_id, hole_number, holder_participant_id?, holder_set_at, holder_set_by, stake?, bet_id?)  -- unique (round,hole); CTP holes; current holder only (king-of-the-hill claims); optional per-player stake settles via "Post to ledger" (round admin page) into an already-closed group bet (everyone in the round's matchups in, holder wins) — bet_id blocks double-posting
 ```
 
 "home" team = first team by name (Europe before USA). Storage bucket `avatars` (public) for player photos.

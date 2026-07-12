@@ -113,12 +113,12 @@ export default async function MatchesPage({
   const { data: ctpRaw } = rounds.length > 0
     ? await supabase
         .from("ctp_holes")
-        .select("id, round_id, hole_number, holder:event_participants(display_name, players(nickname))")
+        .select("id, round_id, hole_number, stake, holder:event_participants(display_name, players(nickname))")
         .in("round_id", rounds.map((r) => r.id))
         .order("hole_number")
     : { data: [] };
   const ctpHoles = (ctpRaw ?? []) as unknown as {
-    id: string; round_id: string; hole_number: number;
+    id: string; round_id: string; hole_number: number; stake: number | null;
     holder: { display_name: string; players: { nickname: string | null } | null } | null;
   }[];
   const { data: myParts } = await supabase
@@ -422,6 +422,11 @@ export default async function MatchesPage({
                       className="flex items-center justify-between gap-2 rounded-xl border border-gold/50 bg-parchment px-3 py-2">
                       <p className="min-w-0 truncate text-sm text-navy">
                         🎯 <span className="font-bold">CTP · #{c.hole_number}</span>
+                        {c.stake != null && (
+                          <span className="ml-1.5 rounded-full bg-gold/25 px-1.5 py-0.5 text-[10px] font-bold text-navy/70">
+                            ${Number(c.stake)}
+                          </span>
+                        )}
                         {holderName ? (
                           <span> — <span className="font-semibold">{holderName}</span>{roundDone ? " 🏆" : ""}</span>
                         ) : (
