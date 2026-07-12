@@ -121,6 +121,26 @@ export default async function MatchesPage({
     id: string; round_id: string; hole_number: number; stake: number | null;
     holder: { display_name: string; players: { nickname: string | null } | null } | null;
   }[];
+  // Claim chains ("JC → Shoops → Kyle") for the CTP strips
+  const { data: claimsRaw } = ctpHoles.length > 0
+    ? await supabase
+        .from("ctp_claims")
+        .select("ctp_id, created_at, event_participants(display_name, players(nickname))")
+        .in("ctp_id", ctpHoles.map((c) => c.id))
+        .order("created_at")
+    : { data: [] };
+  const chainByCtp = new Map<string, string[]>();
+  for (const cl of (claimsRaw ?? []) as unknown as {
+    ctp_id: string;
+    event_participants: { display_name: string; players: { nickname: string | null } | null } | null;
+  }[]) {
+    const name = cl.event_participants?.players?.nickname ?? cl.event_participants?.display_name;
+    if (!name) continue;
+    const chain = chainByCtp.get(cl.ctp_id) ?? [];
+    if (chain[chain.length - 1] !== name) chain.push(name); // collapse re-claims
+    chainByCtp.set(cl.ctp_id, chain);
+  }
+
   const { data: myParts } = await supabase
     .from("event_participants").select("id")
     .eq("event_id", eventId).eq("player_id", player.id).limit(1);
@@ -417,9 +437,11 @@ export default async function MatchesPage({
                   const holderName = c.holder
                     ? c.holder.players?.nickname ?? c.holder.display_name
                     : null;
+                  const chain = chainByCtp.get(c.id) ?? [];
                   return (
                     <div key={c.id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-gold/50 bg-parchment px-3 py-2">
+                      className="rounded-xl border border-gold/50 bg-parchment px-3 py-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate text-sm text-navy">
                         🎯 <span className="font-bold">CTP · #{c.hole_number}</span>
                         {c.stake != null && (
@@ -435,6 +457,12 @@ export default async function MatchesPage({
                       </p>
                       {viewerInField && !roundDone && (
                         <CtpClaimButton ctpId={c.id} day={selectedDay?.key ?? ""} holeNumber={c.hole_number} />
+                      )}
+                      </div>
+                      {chain.length > 1 && (
+                        <p className="truncate text-[11px] text-navy/45">
+                          {chain.join(" → ")}
+                        </p>
                       )}
                     </div>
                   );

@@ -57,6 +57,13 @@ export async function claimCtp(formData: FormData): Promise<void> {
   }).eq("id", ctpId);
   failTo(back, error);
 
+  // Claim chain history — best-effort; a history hiccup must not block the claim.
+  await supabase.from("ctp_claims").insert({
+    ctp_id: ctpId,
+    participant_id: myPart.id,
+    claimed_by: player.id,
+  });
+
   const name = (myPart.players as unknown as { nickname: string | null } | null)?.nickname ?? myPart.display_name;
   await recordCtpEvent(supabase, round.event_id,
     `🎯 ${name} is closest on #${ctp.hole_number} · R${round.round_number}`);

@@ -58,9 +58,6 @@ export default async function RoundEditPage({
     .eq("round_id", params.roundId)
     .order("hole_number");
   const ctpHoles = ctpRaw ?? [];
-  const { data: eventRow } = await supabase
-    .from("events").select("year").eq("id", params.id).single();
-  const eventYear = eventRow?.year ?? new Date().getFullYear();
   const { data: fieldRaw } = await supabase
     .from("event_participants")
     .select("id, display_name")
@@ -157,8 +154,11 @@ export default async function RoundEditPage({
       return;
     }
 
+    // Current calendar year, matching the bet wizard — the ledger and Bets
+    // tab filter on it, so an event with a backfilled/test year (e.g. 2009)
+    // would otherwise file the bet where nobody can see it.
     const { data: bet, error: betError } = await supabase.from("bets").insert({
-      year: eventYear,
+      year: new Date().getFullYear(),
       bet_type: "group",
       amount: ctp.stake,
       description: `CTP #${ctp.hole_number} · R${round.round_number}`,
@@ -209,6 +209,11 @@ export default async function RoundEditPage({
     }).eq("id", ctpId);
     failTo(path, error);
     if (holderId) {
+      await supabase.from("ctp_claims").insert({
+        ctp_id: ctpId,
+        participant_id: holderId,
+        claimed_by: me.id,
+      });
       const { data: ctp } = await supabase
         .from("ctp_holes").select("hole_number, event_participants(display_name)").eq("id", ctpId).single();
       const name = (ctp?.event_participants as unknown as { display_name: string } | null)?.display_name;

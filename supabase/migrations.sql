@@ -1391,3 +1391,24 @@ alter table feed_events add constraint feed_events_kind_check
 -- bet_id remembers it so a hole can't be posted twice.
 alter table ctp_holes add column if not exists stake numeric(8,2) check (stake is null or stake > 0);
 alter table ctp_holes add column if not exists bet_id uuid references bets(id) on delete set null;
+
+-- ============================================================
+-- CTP claim history: the king-of-the-hill chain, not just the last man
+-- ============================================================
+
+create table if not exists ctp_claims (
+  id             uuid primary key default gen_random_uuid(),
+  ctp_id         uuid not null references ctp_holes(id) on delete cascade,
+  participant_id uuid not null references event_participants(id) on delete cascade,
+  claimed_by     uuid references players(id) on delete set null,
+  created_at     timestamptz not null default now()
+);
+create index if not exists ctp_claims_ctp_idx on ctp_claims(ctp_id, created_at);
+
+alter table ctp_claims enable row level security;
+drop policy if exists "authenticated users can read ctp claims" on ctp_claims;
+drop policy if exists "authenticated users can write ctp claims" on ctp_claims;
+create policy "authenticated users can read ctp claims"
+  on ctp_claims for select to authenticated using (true);
+create policy "authenticated users can write ctp claims"
+  on ctp_claims for all to authenticated using (true) with check (true);
