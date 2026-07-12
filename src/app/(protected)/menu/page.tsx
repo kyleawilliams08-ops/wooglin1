@@ -6,7 +6,6 @@ export default async function MenuPage() {
   const player = await requirePlayer();
 
   const clubhouse = [
-    { href: "/draft",   label: "Draft Room",   desc: "The live draft — watch or make your picks" },
     { href: "/players", label: "Player Cards", desc: "Appearances, records & profiles" },
     { href: "/history", label: "History",      desc: "Past cups and champions" },
     { href: "/courses", label: "Courses",      desc: "Courses, tees & ratings" },
