@@ -61,27 +61,46 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
         return (
           <li key={p.id} className="rounded-xl border border-hairline bg-white px-4 py-3 space-y-2">
             {/* View row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {p.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.avatar_url} alt={p.name}
-                    className="h-10 w-10 rounded-full object-cover ring-1 ring-hairline" />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-xs font-bold text-off-white">
-                    {initials(p)}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {/* Tap the face to change the photo */}
+                <label className="group relative shrink-0 cursor-pointer" title="Change photo">
+                  {p.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.avatar_url} alt={p.name}
+                      className="h-10 w-10 rounded-full object-cover ring-1 ring-hairline" />
+                  ) : (
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-xs font-bold text-off-white">
+                      {initials(p)}
+                    </span>
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-sm text-white opacity-0 transition group-hover:opacity-100">
+                    {uploadingId === p.id ? "…" : "📷"}
                   </span>
-                )}
-                <div>
-                  <p className="font-semibold text-navy">{p.name}</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingId === p.id}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadAvatar(p, f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-navy">{p.name}</p>
                   <p className="text-xs text-navy/50">
-                    {p.current_index != null ? `Index ${formatHcp(p.current_index)}` : "No index"} · <span className="uppercase">{p.role}</span>
+                    {p.current_index != null ? `Index ${formatHcp(p.current_index)}` : "No index"}
+                    {(p.role === "admin" || p.role === "assistant") ? " · Admin" : ""}
                   </p>
+                  <p className="truncate text-xs text-navy/40">{p.email}</p>
                 </div>
               </div>
               <button
                 onClick={() => setEditingId(isEditing ? null : p.id)}
-                className="text-sm text-navy/50 hover:text-navy"
+                className="shrink-0 text-sm text-navy/50 hover:text-navy"
               >
                 {isEditing ? "Cancel" : "Edit"}
               </button>
@@ -123,12 +142,10 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                   />
                   <select
                     name="role"
-                    defaultValue={p.role}
+                    defaultValue={p.role === "admin" || p.role === "assistant" ? "admin" : "player"}
                     className="w-full rounded-lg border border-hairline px-3 py-1.5 text-sm text-navy bg-white"
                   >
                     <option value="player">Player</option>
-                    <option value="captain">Captain</option>
-                    <option value="assistant">Assistant</option>
                     <option value="admin">Admin</option>
                   </select>
                   <button type="submit" className="w-full rounded-lg bg-navy py-1.5 text-sm font-semibold text-off-white">
@@ -136,21 +153,7 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                   </button>
                 </form>
 
-                {/* Photo upload — separate from the form; saves immediately */}
-                <label className="block w-full cursor-pointer rounded-lg border border-hairline px-3 py-1.5 text-center text-sm text-navy/70 hover:bg-parchment">
-                  {uploadingId === p.id ? "Uploading…" : p.avatar_url ? "Replace photo" : "Upload photo"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploadingId === p.id}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) uploadAvatar(p, f);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                <p className="text-center text-[11px] text-navy/40">Tap the photo above to change it.</p>
 
                 <DeleteButton
                   action={deletePlayer}

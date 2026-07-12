@@ -33,6 +33,7 @@ export default async function AdminPlayersPage({
     });
     failTo("/admin/players", error);
     revalidatePath("/admin/players");
+    redirect("/admin/players?saved=1");
   }
 
   async function updatePlayer(formData: FormData) {
@@ -47,6 +48,7 @@ export default async function AdminPlayersPage({
     }).eq("id", formData.get("id") as string);
     failTo("/admin/players", error);
     revalidatePath("/admin/players");
+    redirect("/admin/players?saved=1");
   }
 
   async function deletePlayer(formData: FormData) {
@@ -71,8 +73,6 @@ export default async function AdminPlayersPage({
         <input name="index" placeholder="USGA Index — use +2.0 for plus handicaps" type="text" inputMode="decimal" className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
         <select name="role" className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
           <option value="player">Player</option>
-          <option value="captain">Captain</option>
-          <option value="assistant">Assistant</option>
           <option value="admin">Admin</option>
         </select>
         <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
