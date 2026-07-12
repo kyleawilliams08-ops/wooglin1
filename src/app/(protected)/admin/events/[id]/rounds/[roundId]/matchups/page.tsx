@@ -200,9 +200,21 @@ export default async function MatchupsPage({
       failTo(path, error);
     }
 
+    // If the target's lineups are now fully set, complete any open draft on it
+    // so it doesn't sit stuck on LIVE (the copy set the pairings, not picks).
+    const { data: tgtAfter } = await supabase
+      .from("matchups").select("home_p1_id, away_p1_id").eq("round_id", targetId);
+    const allSet = (tgtAfter?.length ?? 0) > 0 && (tgtAfter ?? []).every((m) => m.home_p1_id && m.away_p1_id);
+    if (allSet) {
+      await supabase.from("lineup_drafts")
+        .update({ status: "complete", current_pick_started_at: null })
+        .eq("round_id", targetId).neq("status", "complete");
+    }
+
     const { data: tRound } = await supabase.from("rounds").select("round_number").eq("id", targetId).single();
     revalidatePath(path);
     revalidatePath(`/admin/events/${params.id}/rounds/${targetId}/matchups`);
+    revalidatePath(`/matches/lineup-draft/${targetId}`);
     revalidatePath("/matches");
     redirect(`${path}?copied=${tRound?.round_number ?? ""}`);
   }
@@ -241,6 +253,21 @@ export default async function MatchupsPage({
     failTo(path, error);
     revalidatePath(path);
     revalidatePath("/matches");
+  }
+
+  // Finish a draft without running every pick — e.g. lineups were set by
+  // copying another round. Clears the LIVE state, keeps the matchups.
+  async function completeLineupDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+    const { error } = await supabase.from("lineup_drafts")
+      .update({ status: "complete", current_pick_started_at: null })
+      .eq("id", formData.get("draft_id") as string);
+    failTo(path, error);
+    revalidatePath(path);
+    revalidatePath("/matches");
+    revalidatePath(`/matches/lineup-draft/${params.roundId}`);
   }
 
   function resultDisplay(result: string | null, matchScore: string | null) {
@@ -380,6 +407,18 @@ export default async function MatchupsPage({
                 className="rounded-lg border border-usa-red/40 px-3 py-2 text-sm font-semibold text-usa-red"
               />
             </div>
+            {lineupDraft.status === "live" && (
+              <form action={completeLineupDraft}>
+                <input type="hidden" name="draft_id" value={lineupDraft.id} />
+                <button type="submit"
+                  className="w-full rounded-lg bg-europe-green py-2 text-sm font-bold text-white">
+                  ✓ Mark draft complete
+                </button>
+                <p className="mt-1 text-center text-[11px] text-navy/45">
+                  Ends the LIVE draft and keeps the current pairings (use this if you set lineups by copying another round).
+                </p>
+              </form>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-xs text-navy/50">{lineupPickCount ?? 0} of {matchups.length * 2} picks in</span>
               <DeleteButton
