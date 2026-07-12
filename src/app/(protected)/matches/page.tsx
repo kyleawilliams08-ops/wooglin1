@@ -4,11 +4,10 @@ import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { CardMenu } from "@/components/CardMenu";
 import { StartLineupDraftButton } from "@/components/StartLineupDraftButton";
-import { ConfirmForm } from "@/components/ConfirmForm";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { CtpClaimButton } from "@/components/CtpClaimButton";
 import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
-import { claimCtp } from "@/lib/ctpActions";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
 
@@ -430,18 +429,7 @@ export default async function MatchesPage({
                         )}
                       </p>
                       {viewerInField && !roundDone && (
-                        <ConfirmForm
-                          action={claimCtp}
-                          confirm={`Mark yourself closest on #${c.hole_number}?${holderName ? ` This takes it from ${holderName}.` : ""}`}
-                          className="shrink-0"
-                        >
-                          <input type="hidden" name="ctp_id" value={c.id} />
-                          <input type="hidden" name="day" value={selectedDay?.key ?? ""} />
-                          <button type="submit"
-                            className="rounded-full bg-navy px-3 py-1 text-xs font-bold text-off-white">
-                            I&rsquo;m closest
-                          </button>
-                        </ConfirmForm>
+                        <CtpClaimButton ctpId={c.id} day={selectedDay?.key ?? ""} holeNumber={c.hole_number} />
                       )}
                     </div>
                   );
