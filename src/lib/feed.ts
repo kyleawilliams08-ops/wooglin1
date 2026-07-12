@@ -522,3 +522,21 @@ export async function recordLineupDraftEvent(supabase: Supa, eventId: string, me
     // best-effort
   }
 }
+
+/**
+ * CTP takeovers: "🎯 Kyle is closest on #8 · R2". Best-effort like the rest —
+ * a feed hiccup must never block the claim itself.
+ */
+export async function recordCtpEvent(supabase: Supa, eventId: string, message: string): Promise<void> {
+  try {
+    await supabase.from("feed_events").insert({
+      event_id: eventId,
+      matchup_id: null,
+      kind: "ctp",
+      hole_number: 0,
+      message,
+    });
+  } catch {
+    // best-effort
+  }
+}

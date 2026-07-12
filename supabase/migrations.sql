@@ -1091,12 +1091,12 @@ create policy "authenticated users can read bet_participants"
 create policy "authenticated users can write bet_participants"
   on bet_participants for all to authenticated using (true) with check (true);
 
--- Feed: allow 'bet' entries. (Kept forward-compatible with 'draft' below so a
--- full re-run of this file doesn't drop the newer constraint and then fail to
--- re-add it against feed rows that already use 'draft'.)
+-- Feed: allow 'bet' entries. (Kept forward-compatible with the kinds added
+-- below so a full re-run of this file doesn't drop the newer constraint and
+-- then fail to re-add it against feed rows that already use them.)
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
-  check (kind in ('hole','match_final','standings','lineup','bet','draft'));
+  check (kind in ('hole','match_final','standings','lineup','bet','draft','ctp'));
 
 -- ============================================================
 -- Betting v2: no acceptance (bets are live immediately) + protests
@@ -1243,10 +1243,11 @@ begin
 exception when duplicate_object then null;
 end $$;
 
--- Feed: allow 'draft' entries (draft live / each pick / rosters set)
+-- Feed: allow 'draft' entries (draft live / each pick / rosters set).
+-- 'ctp' listed too — see the re-run note on the earlier constraint.
 alter table feed_events drop constraint if exists feed_events_kind_check;
 alter table feed_events add constraint feed_events_kind_check
-  check (kind in ('hole','match_final','standings','lineup','bet','draft'));
+  check (kind in ('hole','match_final','standings','lineup','bet','draft','ctp'));
 
 -- ============================================================
 -- Lineup Draft: optional per-round snake draft that sets a round's matchups
@@ -1337,3 +1338,45 @@ create policy "captains can update event participants" on event_participants
     where cap.event_id = event_participants.event_id and cap.is_captain
       and p.auth_user_id = auth.uid()
   ));
+
+-- ============================================================
+-- Closest to the Pin: per-round CTP holes with self-claimed holders
+-- ============================================================
+
+-- Admin marks which hole(s) are CTP for a round; during play anyone in the
+-- event taps "I'm closest" to take it over (king of the hill — the app
+-- finally remembers who won). Current holder only; each takeover posts to
+-- the feed, and admins can correct/clear from the round admin page.
+create table if not exists ctp_holes (
+  id                    uuid primary key default gen_random_uuid(),
+  round_id              uuid not null references rounds(id) on delete cascade,
+  hole_number           integer not null check (hole_number between 1 and 18),
+  holder_participant_id uuid references event_participants(id) on delete set null,
+  holder_set_at         timestamptz,
+  holder_set_by         uuid references players(id) on delete set null,
+  created_at            timestamptz not null default now(),
+  unique (round_id, hole_number)
+);
+create index if not exists ctp_holes_round_idx on ctp_holes(round_id);
+
+alter table ctp_holes enable row level security;
+drop policy if exists "authenticated users can read ctp" on ctp_holes;
+drop policy if exists "authenticated users can write ctp" on ctp_holes;
+create policy "authenticated users can read ctp"
+  on ctp_holes for select to authenticated using (true);
+-- Admin-only setup and claim rules are enforced by the server actions
+-- (friends-app trust model, same as bets/feed).
+create policy "authenticated users can write ctp"
+  on ctp_holes for all to authenticated using (true) with check (true);
+
+-- Realtime so the Matches page updates the holder without a refresh
+do $$
+begin
+  alter publication supabase_realtime add table ctp_holes;
+exception when duplicate_object then null;
+end $$;
+
+-- Feed: allow 'ctp' entries ("🎯 Kyle is closest on #8")
+alter table feed_events drop constraint if exists feed_events_kind_check;
+alter table feed_events add constraint feed_events_kind_check
+  check (kind in ('hole','match_final','standings','lineup','bet','draft','ctp'));

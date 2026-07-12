@@ -5,7 +5,7 @@ import { LiveRefresher } from "@/components/LiveRefresher";
 import { FeedList, type FeedItem } from "@/components/FeedList";
 import { FeedFilter } from "@/components/FeedFilter";
 
-const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet", "draft"];
+const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet", "draft", "ctp"];
 
 // Full clubhouse feed for the active event (Home shows the latest 10).
 export default async function FeedPage({

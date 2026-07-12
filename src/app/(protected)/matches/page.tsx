@@ -4,8 +4,11 @@ import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { CardMenu } from "@/components/CardMenu";
 import { StartLineupDraftButton } from "@/components/StartLineupDraftButton";
+import { ConfirmForm } from "@/components/ConfirmForm";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
+import { claimCtp } from "@/lib/ctpActions";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
 
@@ -38,7 +41,7 @@ function dayLabel(dateStr: string): string {
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: { day?: string };
+  searchParams: { day?: string; error?: string };
 }) {
   const player = await requirePlayer();
   const admin = isAdmin(player);
@@ -106,6 +109,23 @@ export default async function MatchesPage({
   const lineupDraftByRound = new Map((allLineupDrafts ?? []).map((d) => [d.round_id, d.status]));
   const liveDraft = (allLineupDrafts ?? []).find((d) => d.status === "live") ?? null;
   const liveDraftRound = liveDraft ? rounds.find((r) => r.id === liveDraft.round_id) ?? null : null;
+
+  // CTP holes for these rounds (+ whether the viewer can claim one)
+  const { data: ctpRaw } = rounds.length > 0
+    ? await supabase
+        .from("ctp_holes")
+        .select("id, round_id, hole_number, holder:event_participants(display_name, players(nickname))")
+        .in("round_id", rounds.map((r) => r.id))
+        .order("hole_number")
+    : { data: [] };
+  const ctpHoles = (ctpRaw ?? []) as unknown as {
+    id: string; round_id: string; hole_number: number;
+    holder: { display_name: string; players: { nickname: string | null } | null } | null;
+  }[];
+  const { data: myParts } = await supabase
+    .from("event_participants").select("id")
+    .eq("event_id", eventId).eq("player_id", player.id).limit(1);
+  const viewerInField = (myParts?.length ?? 0) > 0;
 
   const { data: matchupsRaw } = rounds.length > 0
     ? await supabase
@@ -317,6 +337,7 @@ export default async function MatchesPage({
       )}
 
       <div className="px-4 pt-4 space-y-5">
+        <ErrorBanner message={searchParams.error} />
         {rounds.length === 0 && (
           <p className="text-sm text-navy/50">
             No rounds yet.{admin ? " Set them up under Menu → Events." : " Check back once the schedule drops."}
@@ -386,6 +407,45 @@ export default async function MatchesPage({
                   );
                 }
                 return null;
+              })()}
+
+              {/* Closest to the Pin: current holder + tap-to-claim */}
+              {(() => {
+                const roundCtp = ctpHoles.filter((c) => c.round_id === round.id);
+                if (roundCtp.length === 0) return null;
+                const roundDone = ms.length > 0 && ms.every((m) => stateById[m.id]?.final);
+                return roundCtp.map((c) => {
+                  const holderName = c.holder
+                    ? c.holder.players?.nickname ?? c.holder.display_name
+                    : null;
+                  return (
+                    <div key={c.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-gold/50 bg-parchment px-3 py-2">
+                      <p className="min-w-0 truncate text-sm text-navy">
+                        🎯 <span className="font-bold">CTP · #{c.hole_number}</span>
+                        {holderName ? (
+                          <span> — <span className="font-semibold">{holderName}</span>{roundDone ? " 🏆" : ""}</span>
+                        ) : (
+                          <span className="text-navy/50"> — unclaimed</span>
+                        )}
+                      </p>
+                      {viewerInField && !roundDone && (
+                        <ConfirmForm
+                          action={claimCtp}
+                          confirm={`Mark yourself closest on #${c.hole_number}?${holderName ? ` This takes it from ${holderName}.` : ""}`}
+                          className="shrink-0"
+                        >
+                          <input type="hidden" name="ctp_id" value={c.id} />
+                          <input type="hidden" name="day" value={selectedDay?.key ?? ""} />
+                          <button type="submit"
+                            className="rounded-full bg-navy px-3 py-1 text-xs font-bold text-off-white">
+                            I&rsquo;m closest
+                          </button>
+                        </ConfirmForm>
+                      )}
+                    </div>
+                  );
+                });
               })()}
 
               {ms.length === 0 ? (

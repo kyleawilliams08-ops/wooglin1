@@ -15,6 +15,7 @@ const ICONS: Record<string, string> = {
   lineup: "📋",
   bet: "💰",
   draft: "🐉",
+  ctp: "🎯",
 };
 
 function timeAgo(iso: string): string {

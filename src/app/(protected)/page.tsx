@@ -22,7 +22,7 @@ const QUIPS = [
   "The dragon guards the flag.",
 ];
 
-const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet", "draft"];
+const VALID_KINDS = ["hole", "match_final", "standings", "lineup", "bet", "draft", "ctp"];
 
 export default async function Home({
   searchParams,

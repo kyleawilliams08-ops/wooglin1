@@ -48,6 +48,11 @@ export function LiveRefresher({ matchupId }: { matchupId?: string }) {
         { event: "*", schema: "public", table: "feed_events" },
         refresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ctp_holes" },
+        refresh,
+      )
       .subscribe();
 
     return () => {

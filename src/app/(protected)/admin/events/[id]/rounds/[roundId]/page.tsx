@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { DeleteButton } from "@/components/DeleteButton";
 import { failTo } from "@/lib/actionError";
+import { recordCtpEvent } from "@/lib/feed";
 
 export default async function RoundEditPage({
   params,
@@ -48,6 +50,79 @@ export default async function RoundEditPage({
   }[];
 
   const { data: formats } = await supabase.from("formats").select("id, name").order("sort_order");
+
+  // CTP holes for this round + the event field (for the holder picker)
+  const { data: ctpRaw } = await supabase
+    .from("ctp_holes")
+    .select("id, hole_number, holder_participant_id")
+    .eq("round_id", params.roundId)
+    .order("hole_number");
+  const ctpHoles = ctpRaw ?? [];
+  const { data: fieldRaw } = await supabase
+    .from("event_participants")
+    .select("id, display_name")
+    .eq("event_id", params.id)
+    .order("display_name");
+  const field = fieldRaw ?? [];
+
+  // Valid hole numbers for this round's side
+  const holeRange = round.side === "front" ? [1, 9] : round.side === "back" ? [10, 18] : [1, 18];
+
+  async function addCtpHole(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}`;
+    const hole = parseInt(formData.get("hole_number") as string);
+    const lo = round.side === "front" ? 1 : round.side === "back" ? 10 : 1;
+    const hi = round.side === "front" ? 9 : 18;
+    if (!hole || hole < lo || hole > hi) {
+      failTo(path, { message: `Hole must be between ${lo} and ${hi} for this round.` });
+    }
+    const { error } = await supabase.from("ctp_holes").insert({
+      round_id: params.roundId,
+      hole_number: hole,
+    });
+    failTo(path, error);
+    revalidatePath(path);
+    revalidatePath("/matches");
+  }
+
+  async function setCtpHolder(formData: FormData) {
+    "use server";
+    const me = await requirePlayer();
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}`;
+    const holderId = (formData.get("holder") as string) || null;
+    const ctpId = formData.get("ctp_id") as string;
+    const { error } = await supabase.from("ctp_holes").update({
+      holder_participant_id: holderId,
+      holder_set_at: holderId ? new Date().toISOString() : null,
+      holder_set_by: holderId ? me.id : null,
+    }).eq("id", ctpId);
+    failTo(path, error);
+    if (holderId) {
+      const { data: ctp } = await supabase
+        .from("ctp_holes").select("hole_number, event_participants(display_name)").eq("id", ctpId).single();
+      const name = (ctp?.event_participants as unknown as { display_name: string } | null)?.display_name;
+      if (name) {
+        await recordCtpEvent(supabase, params.id,
+          `🎯 ${name} is closest on #${ctp!.hole_number} · R${round.round_number} (commissioner call)`);
+      }
+    }
+    revalidatePath(path);
+    revalidatePath("/matches");
+    revalidatePath("/");
+  }
+
+  async function removeCtpHole(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const path = `/admin/events/${params.id}/rounds/${params.roundId}`;
+    const { error } = await supabase.from("ctp_holes").delete().eq("id", formData.get("ctp_id") as string);
+    failTo(path, error);
+    revalidatePath(path);
+    revalidatePath("/matches");
+  }
 
   async function updateRound(formData: FormData) {
     "use server";
@@ -110,6 +185,61 @@ export default async function RoundEditPage({
           Save Changes
         </button>
       </form>
+
+      {/* Closest to the Pin */}
+      <div className="space-y-3">
+        <p className="font-semibold text-navy">🎯 Closest to the Pin</p>
+        <p className="text-sm text-navy/50 -mt-2">
+          Players claim these on the Matches page during the round — newest claim
+          holds it. Set or clear the holder here if the group needs a ruling.
+        </p>
+
+        {ctpHoles.map((c) => (
+          <div key={c.id} className="rounded-xl border border-hairline bg-white px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-navy">Hole {c.hole_number}</p>
+              <DeleteButton
+                action={removeCtpHole}
+                fields={{ ctp_id: c.id }}
+                confirm={`Remove CTP on hole ${c.hole_number}?`}
+                label="Remove"
+                className="text-xs text-usa-red hover:underline"
+              />
+            </div>
+            <form action={setCtpHolder} className="flex items-center gap-2">
+              <input type="hidden" name="ctp_id" value={c.id} />
+              <select name="holder" defaultValue={c.holder_participant_id ?? ""}
+                className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white">
+                <option value="">— unclaimed —</option>
+                {field.map((p) => (
+                  <option key={p.id} value={p.id}>{p.display_name}</option>
+                ))}
+              </select>
+              <button type="submit" className="shrink-0 text-xs text-navy/50 hover:text-navy underline">
+                Save holder
+              </button>
+            </form>
+          </div>
+        ))}
+        {ctpHoles.length === 0 && (
+          <p className="text-sm text-navy/40">No CTP holes yet.</p>
+        )}
+
+        <form action={addCtpHole} className="flex items-center gap-2 rounded-xl border border-dashed border-hairline p-3">
+          <input
+            name="hole_number"
+            type="number"
+            min={holeRange[0]}
+            max={holeRange[1]}
+            required
+            placeholder={`Hole (${holeRange[0]}–${holeRange[1]})`}
+            className="flex-1 rounded-lg border border-hairline px-3 py-2 text-sm text-navy"
+          />
+          <button type="submit" className="shrink-0 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-off-white">
+            Add CTP Hole
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
