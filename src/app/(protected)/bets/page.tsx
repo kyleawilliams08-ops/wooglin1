@@ -92,9 +92,10 @@ export default async function BetsPage({
   const attention = bets
     .filter((b) => mine(b) && (isOpen(b) || b.status === "protested"))
     .sort((a, b) => (a.status === "protested" ? 0 : 1) - (b.status === "protested" ? 0 : 1));
-  const attentionIds = new Set(attention.map((b) => b.id));
 
-  // Browse list (excludes the attention bets — they live above)
+  // History list — the full archive matching the filters. (Your open/protested
+  // bets are also pinned in the Open Action panel above; that's a shortcut, so
+  // they still belong in History too — otherwise an "Open" filter looks empty.)
   const who = searchParams.who === "me" ? "me" : "all";
   const statusF = ["open", "settled", "protested"].includes(searchParams.status ?? "")
     ? (searchParams.status as "open" | "settled" | "protested")
@@ -105,7 +106,7 @@ export default async function BetsPage({
     : statusF === "protested" ? b.status === "protested"
     : b.status === "closed" || b.status === "push";
   const visible = bets.filter(
-    (b) => b.status !== "void" && !attentionIds.has(b.id) && statusMatch(b) && (who === "me" ? mine(b) : true),
+    (b) => b.status !== "void" && statusMatch(b) && (who === "me" ? mine(b) : true),
   );
   const tab = searchParams.tab === "history" ? "history" : "ledger";
 

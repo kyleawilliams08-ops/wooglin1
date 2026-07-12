@@ -63,9 +63,9 @@ export function BetFilter() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 left-0 right-0 space-y-4 rounded-t-2xl bg-white p-4 pb-8 shadow-xl"
+          <div className="absolute bottom-0 left-0 right-0 space-y-4 rounded-t-2xl bg-white p-4 pb-10 shadow-xl"
             onClick={(e) => e.stopPropagation()}>
             <p className="text-center text-sm font-semibold text-navy">Filter bets</p>
             {group("Show", "who", who, WHO)}

@@ -47,10 +47,10 @@ export function FeedFilter() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-2xl bg-white p-4 pb-8 shadow-xl"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl bg-white p-4 pb-10 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-3 text-center text-sm font-semibold text-navy">Show only…</p>
