@@ -86,7 +86,8 @@ export default async function HolesPage({
                           type="number"
                           min="3" max="5"
                           defaultValue={holeMap[n]?.par ?? 4}
-                          className="w-9 rounded border border-hairline px-1 py-1 text-center text-sm text-navy"
+                          inputMode="numeric"
+                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </td>
                     ))}
@@ -100,7 +101,8 @@ export default async function HolesPage({
                           type="number"
                           min="1" max="18"
                           defaultValue={holeMap[n]?.stroke_index ?? n}
-                          className="w-9 rounded border border-hairline px-1 py-1 text-center text-sm text-navy"
+                          inputMode="numeric"
+                          className="w-11 rounded border border-hairline px-1 py-1 text-center text-sm text-navy [appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </td>
                     ))}
