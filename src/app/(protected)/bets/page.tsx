@@ -108,7 +108,7 @@ export default async function BetsPage({
   const visible = bets.filter(
     (b) => b.status !== "void" && statusMatch(b) && (who === "me" ? mine(b) : true),
   );
-  const tab = searchParams.tab === "history" ? "history" : "ledger";
+  const tab = searchParams.tab === "activity" ? "activity" : "ledger";
 
   const totals = ledgerNets(bets.map((b) => ({ ...b, amount: Number(b.amount) })));
   const myNet = totals.get(player.id) ?? 0;
@@ -466,7 +466,7 @@ export default async function BetsPage({
 
       {/* Ledger / History tabs — one at a time */}
       <div className="flex gap-2">
-        {([["ledger", "Ledger"], ["history", "History"]] as const).map(([t, label]) => (
+        {([["ledger", "Ledger"], ["activity", "Activity"]] as const).map(([t, label]) => (
           <Link key={t} href={`/bets?tab=${t}`}
             className={`flex-1 rounded-full border px-4 py-2 text-center text-sm font-semibold ${
               tab === t ? "bg-navy text-off-white border-navy" : "bg-white text-navy/60 border-hairline"
@@ -491,7 +491,7 @@ export default async function BetsPage({
             </p>
             <span className="flex items-center gap-3">
               {(who !== "all" || statusF !== "all") && (
-                <Link href="/bets?tab=history" className="text-[11px] font-semibold text-navy/50 underline underline-offset-2">
+                <Link href="/bets?tab=activity" className="text-[11px] font-semibold text-navy/50 underline underline-offset-2">
                   Clear
                 </Link>
               )}
