@@ -340,6 +340,20 @@ export default async function EventDetailPage({
     revalidatePath("/");
   }
 
+  // Finish a live draft that won't auto-complete (e.g. some players were
+  // never drafted). Keeps whatever team assignments were made.
+  async function completeDraft(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("drafts")
+      .update({ status: "complete", current_pick_started_at: null })
+      .eq("id", formData.get("draft_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/draft");
+    revalidatePath("/");
+  }
+
   const sideLabel: Record<string, string> = { front: "Front 9", back: "Back 9", full: "Full 18" };
   const draftInputCls = "w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy";
 
@@ -781,6 +795,19 @@ export default async function EventDetailPage({
                 />
               )}
             </div>
+
+            {draft.status === "live" && (
+              <form action={completeDraft}>
+                <input type="hidden" name="draft_id" value={draft.id} />
+                <button type="submit"
+                  className="w-full rounded-lg bg-europe-green py-2 text-sm font-bold text-white">
+                  ✓ Mark draft complete
+                </button>
+                <p className="mt-1 text-center text-[11px] text-navy/45">
+                  Ends the LIVE draft and keeps the current rosters (use this if some players won&rsquo;t be drafted).
+                </p>
+              </form>
+            )}
           </div>
         )}
       </div>
