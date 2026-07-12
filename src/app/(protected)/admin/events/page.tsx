@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { EventList } from "./EventList";
+import { Collapsible } from "@/components/Collapsible";
 
 export default async function AdminEventsPage({
   searchParams,
@@ -40,20 +41,22 @@ export default async function AdminEventsPage({
     <div className="px-4 py-6 space-y-6">
       <h1 className="text-2xl font-display font-bold text-navy">Events</h1>
 
-      <form action={addEvent} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
-        <p className="font-semibold text-navy text-sm">New Event</p>
-        {searchParams.error && (
-          <p className="rounded-lg bg-usa-red/10 px-3 py-2 text-sm text-usa-red">{searchParams.error}</p>
-        )}
-        <input name="year"       required placeholder="Year (e.g. 2026)" type="number" className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-        <input name="name"       required placeholder="Event name"                     className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-        <input name="location"            placeholder="Location"                       className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-        <input name="start_date"          placeholder="Start date" type="date"         className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-        <input name="end_date"            placeholder="End date"   type="date"         className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-        <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
-          Create Event
-        </button>
-      </form>
+      <Collapsible label="New Event" defaultOpen={!!searchParams.error}>
+        <form action={addEvent} className="rounded-xl border border-hairline bg-parchment p-4 space-y-3">
+          <p className="font-semibold text-navy text-sm">New Event</p>
+          {searchParams.error && (
+            <p className="rounded-lg bg-usa-red/10 px-3 py-2 text-sm text-usa-red">{searchParams.error}</p>
+          )}
+          <input name="year"       required placeholder="Year (e.g. 2026)" type="number" className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+          <input name="name"       required placeholder="Event name"                     className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+          <input name="location"            placeholder="Location"                       className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+          <input name="start_date"          placeholder="Start date" type="date"         className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+          <input name="end_date"            placeholder="End date"   type="date"         className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+          <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+            Create Event
+          </button>
+        </form>
+      </Collapsible>
 
       <EventList events={events ?? []} />
     </div>

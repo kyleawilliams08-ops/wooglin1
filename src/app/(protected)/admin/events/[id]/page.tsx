@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
+import { Collapsible } from "@/components/Collapsible";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { recordDraftEvent } from "@/lib/feed";
@@ -536,6 +537,7 @@ export default async function EventDetailPage({
         ))}
 
         {tees.length > 0 && (
+          <Collapsible label="Add Round">
           <form action={addRound} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
             <p className="font-semibold text-navy text-sm">Add Round</p>
             <input name="name" placeholder="Label (optional, e.g. Morning)"
@@ -568,6 +570,7 @@ export default async function EventDetailPage({
               Add Round
             </button>
           </form>
+          </Collapsible>
         )}
         {tees.length === 0 && (
           <p className="text-sm text-navy/40">Add a course above before creating rounds.</p>
@@ -609,19 +612,21 @@ export default async function EventDetailPage({
           );
         })}
 
-        <form action={addTeam} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
-          <p className="font-semibold text-navy text-sm">Add Team</p>
-          <input name="name" required placeholder="Team name (e.g. USA)"
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-navy/60">Color</label>
-            <input name="color" type="color" defaultValue="#0C2D55"
-              className="h-9 w-16 rounded border border-hairline cursor-pointer" />
-          </div>
-          <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
-            Add Team
-          </button>
-        </form>
+        <Collapsible label="Add Team">
+          <form action={addTeam} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
+            <p className="font-semibold text-navy text-sm">Add Team</p>
+            <input name="name" required placeholder="Team name (e.g. USA)"
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-navy/60">Color</label>
+              <input name="color" type="color" defaultValue="#0C2D55"
+                className="h-9 w-16 rounded border border-hairline cursor-pointer" />
+            </div>
+            <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+              Add Team
+            </button>
+          </form>
+        </Collapsible>
       </div>
 
       {/* Participants */}
