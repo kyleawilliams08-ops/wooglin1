@@ -1412,3 +1412,27 @@ create policy "authenticated users can read ctp claims"
   on ctp_claims for select to authenticated using (true);
 create policy "authenticated users can write ctp claims"
   on ctp_claims for all to authenticated using (true) with check (true);
+
+-- ============================================================
+-- Self-serve avatars: let any player change their OWN photo
+-- ============================================================
+
+-- Upload: any signed-in player can add to the avatars bucket. (Admins keep
+-- full manage via the earlier policy; the two are OR'd.)
+drop policy if exists "players upload avatars" on storage.objects;
+create policy "players upload avatars" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'avatars');
+
+-- Set avatar_url for ONLY the caller's own player row. SECURITY DEFINER so it
+-- doesn't require a broad self-update policy on players (which would also let
+-- someone change their own role/email/index). Column-safe by construction.
+create or replace function public.set_my_avatar(new_url text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update players set avatar_url = new_url where auth_user_id = auth.uid();
+$$;
+grant execute on function public.set_my_avatar(text) to authenticated;
