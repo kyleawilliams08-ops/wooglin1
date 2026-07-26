@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { DeleteButton } from "@/components/DeleteButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { Collapsible } from "@/components/Collapsible";
+import { TeeSetList } from "./TeeSetList";
 import { failTo } from "@/lib/actionError";
 
 export default async function CourseDetailPage({
@@ -36,6 +37,7 @@ export default async function CourseDetailPage({
     }).eq("id", params.id);
     failTo(`/admin/courses/${params.id}`, error);
     revalidatePath(`/admin/courses/${params.id}`);
+    redirect(`/admin/courses/${params.id}?saved=1`);
   }
 
   async function addTee(formData: FormData) {
@@ -50,6 +52,21 @@ export default async function CourseDetailPage({
     });
     failTo(`/admin/courses/${params.id}`, error);
     revalidatePath(`/admin/courses/${params.id}`);
+    redirect(`/admin/courses/${params.id}?saved=1`);
+  }
+
+  async function updateTee(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("course_tees").update({
+      tee_name: formData.get("tee_name") as string,
+      rating:   parseFloat(formData.get("rating") as string),
+      slope:    parseInt(formData.get("slope") as string),
+      par:      parseInt(formData.get("par") as string),
+    }).eq("id", formData.get("tee_id") as string);
+    failTo(`/admin/courses/${params.id}`, error);
+    revalidatePath(`/admin/courses/${params.id}`);
+    redirect(`/admin/courses/${params.id}?saved=1`);
   }
 
   async function deleteTee(formData: FormData) {
@@ -80,49 +97,39 @@ export default async function CourseDetailPage({
       {/* Tee sets */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Tee Sets</p>
-        {tees?.map((tee) => {
-          const holeCount = (tee.holes as { id: string }[])?.length ?? 0;
-          return (
-            <div key={tee.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
-              <div>
-                <p className="font-semibold text-navy">{tee.tee_name} Tees</p>
-                <p className="text-xs text-navy/50">
-                  Rating {tee.rating} / Slope {tee.slope} / Par {tee.par} · {holeCount} holes
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link href={`/admin/courses/${params.id}/tees/${tee.id}`}
-                  className="text-sm text-navy/60 hover:text-navy">
-                  Holes ›
-                </Link>
-                <DeleteButton
-                  action={deleteTee}
-                  fields={{ tee_id: tee.id }}
-                  confirm={`Delete "${tee.tee_name}" tees and all hole data?`}
-                  label="Delete"
-                  className="text-xs text-usa-red hover:underline"
-                />
-              </div>
-            </div>
-          );
-        })}
 
-        <form action={addTee} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
-          <p className="font-semibold text-navy text-sm">Add Tee Set</p>
-          <input name="tee_name" required placeholder="Tee name (e.g. Blue)"
-            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-          <div className="grid grid-cols-3 gap-2">
-            <input name="rating" required placeholder="Rating" type="number" step="0.1"
-              className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-            <input name="slope" required placeholder="Slope" type="number"
-              className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-            <input name="par" required placeholder="Par" type="number"
-              className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
-          </div>
-          <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
-            Add Tee Set
-          </button>
-        </form>
+        <TeeSetList
+          courseId={params.id}
+          tees={(tees ?? []).map((tee) => ({
+            id: tee.id,
+            tee_name: tee.tee_name,
+            rating: tee.rating,
+            slope: tee.slope,
+            par: tee.par,
+            holeCount: (tee.holes as { id: string }[])?.length ?? 0,
+          }))}
+          updateTee={updateTee}
+          deleteTee={deleteTee}
+        />
+
+        <Collapsible label="Add Tee Set" defaultOpen={!!searchParams.error}>
+          <form action={addTee} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
+            <p className="font-semibold text-navy text-sm">Add Tee Set</p>
+            <input name="tee_name" required placeholder="Tee name (e.g. Blue)"
+              className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+            <div className="grid grid-cols-3 gap-2">
+              <input name="rating" required placeholder="Rating" inputMode="decimal"
+                className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+              <input name="slope" required placeholder="Slope" inputMode="numeric"
+                className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+              <input name="par" required placeholder="Par" inputMode="numeric"
+                className="rounded-lg border border-hairline px-3 py-2 text-sm text-navy" />
+            </div>
+            <button type="submit" className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
+              Add Tee Set
+            </button>
+          </form>
+        </Collapsible>
       </div>
     </div>
   );
