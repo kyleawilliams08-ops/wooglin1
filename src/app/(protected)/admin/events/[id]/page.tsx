@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
 import { Collapsible } from "@/components/Collapsible";
+import { EventTeamList } from "./EventTeamList";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { recordDraftEvent } from "@/lib/feed";
@@ -172,6 +173,19 @@ export default async function EventDetailPage({
     });
     failTo(`/admin/events/${params.id}`, error);
     revalidatePath(`/admin/events/${params.id}`);
+  }
+
+  async function updateTeam(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const { error } = await supabase.from("teams").update({
+      name:  formData.get("name") as string,
+      color: formData.get("color") as string,
+    }).eq("id", formData.get("team_id") as string);
+    failTo(`/admin/events/${params.id}`, error);
+    revalidatePath(`/admin/events/${params.id}`);
+    revalidatePath("/matches");
+    redirect(`/admin/events/${params.id}?section=teams&saved=1`);
   }
 
   async function deleteTeam(formData: FormData) {
@@ -584,33 +598,17 @@ export default async function EventDetailPage({
       {/* Teams */}
       <div className="space-y-3">
         <p className="font-semibold text-navy">Teams</p>
-        {teams?.map((team) => {
-          const count = countByTeam[team.id] ?? 0;
-          return (
-            <div key={team.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: team.color }} />
-                <div>
-                  <p className="font-semibold text-navy">{team.name}</p>
-                  <p className="text-xs text-navy/50">{count} player{count !== 1 ? "s" : ""}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link href={`/admin/events/${params.id}/teams/${team.id}`}
-                  className="text-sm text-navy/60 hover:text-navy">
-                  Manage roster ›
-                </Link>
-                <DeleteButton
-                  action={deleteTeam}
-                  fields={{ team_id: team.id }}
-                  confirm={`Delete team "${team.name}" and all its roster data?`}
-                  label="Delete"
-                  className="text-xs text-usa-red hover:underline"
-                />
-              </div>
-            </div>
-          );
-        })}
+        <EventTeamList
+          eventId={params.id}
+          teams={(teams ?? []).map((team) => ({
+            id: team.id,
+            name: team.name,
+            color: team.color,
+            count: countByTeam[team.id] ?? 0,
+          }))}
+          updateTeam={updateTeam}
+          deleteTeam={deleteTeam}
+        />
 
         <Collapsible label="Add Team">
           <form action={addTeam} className="rounded-xl border border-dashed border-hairline p-4 space-y-3">
