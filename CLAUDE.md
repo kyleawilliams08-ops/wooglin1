@@ -36,6 +36,7 @@ npx tsc --noEmit     # typecheck
 
 - **Primary sign-in = emailed OTP code** typed into the login page (`verifyOtp`, type `"email"`). Magic links break on mobile (PKCE same-browser rule, iOS PWA storage isolation, email link scanners). Keep the code path first-class.
 - SMTP = **Resend**, domain `fairwayfinancialpartners.org` (note `.org`). Custom SMTP is required for the email template (contains `{{ .Token }}`).
+- **If the code stops appearing in sign-in emails** (email shows only a "Sign in" link): the Supabase **Magic Link** email template lost its `{{ .Token }}` line — it reverted to the default. Fix in dashboard → Authentication → Email Templates → Magic Link; the body must include `{{ .Token }}`. Not a code change. (SMTP is fine if the email still sends from the `.org` sender.)
 - After sign-in use `window.location.href = "/"` (hard nav) — `router.replace` hits the cached pre-login redirect.
 - **`players.email` is the single source of login truth**: DB trigger `sync_player_auth_link` re-links `auth_user_id` whenever a player's email is edited (Admin → Player Roster). Seed rows use `@wooglin.local` placeholders until real emails are set.
 - A `/` ↔ `/login` redirect loop means "authenticated but no players row" → login shows `?error=unlinked` message.
