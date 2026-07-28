@@ -21,6 +21,13 @@ export default async function AdminPlayersPage({
     .select("*")
     .order("name");
 
+  // Last sign-in per player (admin-only RPC over auth.users)
+  const { data: lastSeenRows } = await supabase.rpc("player_last_seen");
+  const lastSeen = Object.fromEntries(
+    ((lastSeenRows ?? []) as { player_id: string; last_sign_in_at: string | null }[])
+      .map((r) => [r.player_id, r.last_sign_in_at]),
+  ) as Record<string, string | null>;
+
   async function addPlayer(formData: FormData) {
     "use server";
     const supabase = createClient();
@@ -82,6 +89,7 @@ export default async function AdminPlayersPage({
 
       <PlayerList
         players={players ?? []}
+        lastSeen={lastSeen}
         updatePlayer={updatePlayer}
         deletePlayer={deletePlayer}
       />

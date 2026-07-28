@@ -18,11 +18,25 @@ interface Player {
 
 interface Props {
   players: Player[];
+  /** player id → last sign-in ISO (null = linked but never signed in) */
+  lastSeen: Record<string, string | null>;
   updatePlayer: (formData: FormData) => Promise<void>;
   deletePlayer: (formData: FormData) => Promise<void>;
 }
 
-export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
+/** "today" / "3d ago" / "Mar 14" — compact enough for a roster row. */
+function seenLabel(iso: string | null | undefined): string {
+  if (iso === undefined) return "Never signed in";
+  if (!iso) return "Never signed in";
+  const then = new Date(iso);
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000);
+  if (days <= 0) return "Signed in today";
+  if (days === 1) return "Signed in yesterday";
+  if (days < 30) return `Signed in ${days}d ago`;
+  return `Signed in ${then.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+export function PlayerList({ players, lastSeen, updatePlayer, deletePlayer }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const router = useRouter();
@@ -102,6 +116,14 @@ export function PlayerList({ players, updatePlayer, deletePlayer }: Props) {
                     {p.current_index != null ? `Index ${formatHcp(p.current_index)}` : "No index"}
                   </p>
                   <p className="truncate text-xs text-navy/40">{p.email}</p>
+                  {(() => {
+                    const never = !lastSeen[p.id];
+                    return (
+                      <p className={`text-[11px] ${never ? "font-semibold text-usa-red/70" : "text-navy/35"}`}>
+                        {seenLabel(lastSeen[p.id])}
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
               <button

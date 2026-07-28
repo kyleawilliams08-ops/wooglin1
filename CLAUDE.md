@@ -40,6 +40,7 @@ npx tsc --noEmit     # typecheck
 - After sign-in use `window.location.href = "/"` (hard nav) — `router.replace` hits the cached pre-login redirect.
 - **`players.email` is the single source of login truth**: DB trigger `sync_player_auth_link` re-links `auth_user_id` whenever a player's email is edited (Admin → Player Roster). Seed rows use `@wooglin.local` placeholders until real emails are set.
 - A `/` ↔ `/login` redirect loop means "authenticated but no players row" → login shows `?error=unlinked` message.
+- **Last sign-in (admins only)**: Player Roster shows each player's last login, red "Never signed in" when they haven't — read from `auth.users.last_sign_in_at` (Supabase maintains it; no app-side tracking) via the admin-gated `player_last_seen()` SECURITY DEFINER RPC. Useful for chasing onboarding before the trip.
 - **Self-serve avatars**: any player taps their header avatar (`AvatarUploader`) to change their own photo — uploads to the `avatars` bucket (authenticated insert policy) and sets avatar_url via the `set_my_avatar(text)` SECURITY DEFINER RPC (scoped to auth.uid(), so no broad players self-update policy / no role-escalation surface). Admins still manage any photo from Player Roster.
 
 ## Roles & permissions (3 layers: page gate → in-action re-check → RLS)

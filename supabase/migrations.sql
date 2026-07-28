@@ -1436,3 +1436,26 @@ as $$
   update players set avatar_url = new_url where auth_user_id = auth.uid();
 $$;
 grant execute on function public.set_my_avatar(text) to authenticated;
+
+-- ============================================================
+-- Admin-only: last sign-in per player (from auth.users)
+-- ============================================================
+-- Supabase already records auth.users.last_sign_in_at on every login, so no
+-- new tracking is needed — this just exposes it. SECURITY DEFINER (auth.users
+-- isn't client-readable) with an inline admin check, so a non-admin caller
+-- gets an empty set rather than other people's activity.
+create or replace function public.player_last_seen()
+returns table (player_id uuid, last_sign_in_at timestamptz)
+language sql
+security definer
+set search_path = public
+as $$
+  select p.id, u.last_sign_in_at
+  from players p
+  join auth.users u on u.id = p.auth_user_id
+  where exists (
+    select 1 from players me
+    where me.auth_user_id = auth.uid() and me.role in ('admin','assistant')
+  );
+$$;
+grant execute on function public.player_last_seen() to authenticated;
