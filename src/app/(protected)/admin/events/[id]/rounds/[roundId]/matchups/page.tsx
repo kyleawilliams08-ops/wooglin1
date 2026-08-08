@@ -294,7 +294,9 @@ export default async function MatchupsPage({
     return `${h12}:${mStr} ${ampm}`;
   }
 
-  const canAdd = availableHome.length >= 1 && availableAway.length >= 1;
+  // Tee times come first, lineups later (draft or pickers) — so only require
+  // that the event has two teams, not that unpaired players exist yet.
+  const canAdd = !!homeTeam && !!awayTeam;
 
   return (
     <div className="px-4 py-6 space-y-6">
@@ -310,7 +312,7 @@ export default async function MatchupsPage({
 
       <div>
         <h1 className="text-2xl font-display font-bold text-navy">
-          Matchups — Round {round.round_number}
+          Tee Times — Round {round.round_number}
           {round.name ? ` · ${round.name}` : ""}
         </h1>
         <p className="text-sm text-navy/50 mt-0.5">
@@ -389,7 +391,7 @@ export default async function MatchupsPage({
                 ? "This round is underway — lineups are locked."
                 : !homeTeam || !awayTeam
                 ? "The event needs two teams first."
-                : "Add matchups below before drafting."}
+                : "Add tee times below before drafting."}
             </p>
           )
         ) : (
@@ -436,9 +438,9 @@ export default async function MatchupsPage({
       {/* Matchup list */}
       <div className="space-y-2">
         <p className="text-sm font-semibold text-navy/60 uppercase tracking-wide">
-          {matchups.length} Match{matchups.length !== 1 ? "es" : ""}
+          {matchups.length} Tee Time{matchups.length !== 1 ? "s" : ""}
         </p>
-        {matchups.length === 0 && <p className="text-sm text-navy/40">No matchups yet.</p>}
+        {matchups.length === 0 && <p className="text-sm text-navy/40">No tee times yet.</p>}
 
         {matchups.map((m) => {
           const homePairing = isSingles
@@ -524,7 +526,7 @@ export default async function MatchupsPage({
       {/* Add matchup form */}
       {canAdd ? (
         <form action={addMatchup} className="rounded-xl border border-dashed border-hairline p-4 space-y-4">
-          <p className="font-semibold text-navy text-sm">Add Matchup</p>
+          <p className="font-semibold text-navy text-sm">Add Tee Time</p>
 
           {/* Tee time */}
           <div className="flex items-center gap-3">
@@ -586,13 +588,11 @@ export default async function MatchupsPage({
 
           <button type="submit"
             className="w-full rounded-lg bg-navy py-2 text-sm font-semibold text-off-white">
-            Add Match
+            Add Tee Time
           </button>
         </form>
-      ) : matchups.length > 0 ? (
-        <p className="text-sm text-navy/40">All available players have been paired.</p>
       ) : (
-        <p className="text-sm text-navy/40">Add players to team rosters before creating matchups.</p>
+        <p className="text-sm text-navy/40">Add two teams to this event before creating tee times.</p>
       )}
     </div>
   );
