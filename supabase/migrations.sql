@@ -1459,3 +1459,52 @@ as $$
   );
 $$;
 grant execute on function public.player_last_seen() to authenticated;
+
+-- ============================================================
+-- FIX: infinite recursion in the captain event_participants policy
+-- ============================================================
+-- The earlier "captains can update event participants" policy checked
+-- captaincy with a subquery ON event_participants — inside a policy FOR
+-- event_participants. Postgres applies RLS to that subquery too, so it
+-- recursed ("infinite recursion detected in policy for relation
+-- event_participants"), which broke draft picks and roster edits.
+--
+-- Do the captaincy check in a SECURITY DEFINER function instead: it runs as
+-- the owner, so RLS is not re-applied and the loop is broken.
+create or replace function public.is_event_captain(the_event_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from event_participants cap
+    join players p on p.id = cap.player_id
+    where cap.event_id = the_event_id
+      and cap.is_captain
+      and p.auth_user_id = auth.uid()
+  );
+$$;
+grant execute on function public.is_event_captain(uuid) to authenticated;
+
+drop policy if exists "captains can update event participants" on event_participants;
+create policy "captains can update event participants" on event_participants
+  for update to authenticated
+  using (public.is_event_captain(event_id))
+  with check (public.is_event_captain(event_id));
+
+-- Same treatment for the matchups captain policy: it queries
+-- event_participants, which re-enters that table's policies.
+drop policy if exists "captains can update event matchups" on matchups;
+create policy "captains can update event matchups" on matchups
+  for update to authenticated
+  using (exists (
+    select 1 from rounds r
+    where r.id = matchups.round_id and public.is_event_captain(r.event_id)
+  ))
+  with check (exists (
+    select 1 from rounds r
+    where r.id = matchups.round_id and public.is_event_captain(r.event_id)
+  ));
