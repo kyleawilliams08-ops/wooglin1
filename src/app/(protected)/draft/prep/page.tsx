@@ -79,6 +79,16 @@ export default async function DraftPrepPage({
     teams: { name: string; color: string } | null;
   }[];
 
+  // Cup appearances per player (the backfilled career record)
+  const playerIds = parts.map((p) => p.player_id).filter((id): id is string => !!id);
+  const { data: appearanceRows } = playerIds.length > 0
+    ? await supabase.from("player_appearances").select("player_id").in("player_id", playerIds)
+    : { data: [] };
+  const appearances = (appearanceRows ?? []).reduce<Record<string, number>>((acc, a) => {
+    acc[a.player_id] = (acc[a.player_id] ?? 0) + 1;
+    return acc;
+  }, {});
+
   // Stored handicaps (override wins), keyed player→tee
   const { data: hcpRows } = await supabase
     .from("participant_handicaps")
@@ -98,6 +108,7 @@ export default async function DraftPrepPage({
       nickname: p.players?.nickname ?? null,
       index: p.players?.current_index ?? null,
       playerId: p.player_id,
+      cups: p.player_id ? (appearances[p.player_id] ?? 0) : 0,
       isCaptain: p.is_captain,
       team: p.teams,
     }))
@@ -194,15 +205,28 @@ export default async function DraftPrepPage({
             {rows.map((r) => (
               <tr key={r.id}>
                 <td className="px-3 py-2">
-                  <span className="flex items-center gap-1.5">
-                    {r.team && (
-                      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: r.team.color }} />
-                    )}
-                    <span className="font-semibold text-navy">{r.fullName}</span>
-                    {r.isCaptain && <span className="text-[10px] font-bold uppercase text-gold">C</span>}
-                  </span>
-                  {r.nickname && r.nickname !== r.fullName && (
-                    <span className="block text-[11px] text-navy/40">{r.nickname}</span>
+                  {r.playerId ? (
+                    <Link href={`/players/${r.playerId}`} className="group">
+                      <span className="flex items-center gap-1.5">
+                        {r.team && (
+                          <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: r.team.color }} />
+                        )}
+                        <span className="font-semibold text-navy underline-offset-2 group-hover:underline">
+                          {r.fullName}
+                        </span>
+                        {r.isCaptain && <span className="text-[10px] font-bold uppercase text-gold">C</span>}
+                      </span>
+                      <span className="block text-[11px] text-navy/40">
+                        {[r.nickname && r.nickname !== r.fullName ? r.nickname : null,
+                          `${r.cups} cup${r.cups === 1 ? "" : "s"}`]
+                          .filter(Boolean).join(" · ")}
+                      </span>
+                    </Link>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-navy">{r.fullName}</span>
+                      <span className="block text-[11px] text-navy/40">{r.cups} cups</span>
+                    </>
                   )}
                 </td>
                 <td className="px-2 py-2 text-right font-semibold tabular-nums text-navy">
