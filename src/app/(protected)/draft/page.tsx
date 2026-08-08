@@ -37,6 +37,9 @@ export default async function DraftPage({
               Set up the draft →
             </Link>
           )}
+          <Link href="/draft/prep" className="mt-3 block text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
+            Draft prep sheet →
+          </Link>
         </div>
       </div>
     );
@@ -155,11 +158,16 @@ export default async function DraftPage({
           <h1 className="text-2xl font-display font-bold text-navy">
             {event.year} Draft
           </h1>
-          {isAdmin(player) && (
-            <Link href={`/admin/events/${event.id}`} className="text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
-              Draft setup
+          <span className="flex items-center gap-3">
+            <Link href="/draft/prep" className="text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
+              Prep sheet
             </Link>
-          )}
+            {isAdmin(player) && (
+              <Link href={`/admin/events/${event.id}`} className="text-sm text-navy/50 underline underline-offset-2 hover:text-navy">
+                Draft setup
+              </Link>
+            )}
+          </span>
         </div>
       )}
       <DraftRoom draft={view} tv={tv} />
