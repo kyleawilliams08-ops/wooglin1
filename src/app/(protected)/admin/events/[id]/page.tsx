@@ -704,6 +704,15 @@ export default async function EventDetailPage({
       <>
       {/* Draft */}
       <div className="space-y-3">
+        <Link href="/draft/prep"
+          className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3 transition-colors hover:bg-parchment">
+          <div>
+            <p className="font-semibold text-navy">📋 Draft Prep Sheet</p>
+            <p className="text-xs text-navy/50">Indexes &amp; course handicaps for the field · calculate handicaps</p>
+          </div>
+          <span className="text-navy/30">›</span>
+        </Link>
+
         <div className="flex items-center justify-between">
           <p className="font-semibold text-navy">Draft</p>
           {draft && (
