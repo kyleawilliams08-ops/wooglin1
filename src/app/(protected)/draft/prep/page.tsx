@@ -182,6 +182,10 @@ export default async function DraftPrepPage({
                 <th key={t.id} className="px-2 py-2 text-right font-semibold">
                   <span className="block normal-case text-navy/70">{t.courses?.name}</span>
                   <span className="block text-navy/40">{t.tee_name}</span>
+                  {/* rating / slope / par — so the math can be spot-checked */}
+                  <span className="mt-0.5 block font-normal normal-case tabular-nums text-navy/40">
+                    {t.rating} / {t.slope} / {t.par}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -221,7 +225,9 @@ export default async function DraftPrepPage({
       </div>
 
       <p className="text-[11px] text-navy/40">
-        Sorted by index. Grey course handicaps are previews from the player&rsquo;s index;
+        Tee columns show <span className="tabular-nums">rating / slope / par</span>; course handicap =
+        index × (slope ÷ 113) + (rating − par), rounded. Sorted by index. Grey values are previews from
+        the player&rsquo;s index;
         {admin ? " hit Calculate to save them for the event." : " an admin can save them with Calculate."}
       </p>
     </div>
