@@ -1,26 +1,15 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
 // The Menu: clubhouse pages everyone can see, plus commissioner tools for admins.
 export default async function MenuPage() {
   const player = await requirePlayer();
 
-  // Captains (of any event) get the draft prep sheet alongside admins — it's
-  // their pre-draft homework, and keeps the Menu clean for everyone else.
-  const supabase = createClient();
-  const { data: captaincies } = await supabase
-    .from("event_participants").select("id")
-    .eq("player_id", player.id).eq("is_captain", true).limit(1);
-  const isCaptain = (captaincies?.length ?? 0) > 0;
-
   const clubhouse = [
-    ...(isCaptain || isAdmin(player)
-      ? [{ href: "/draft/prep", label: "Draft Prep", desc: "Indexes & course handicaps for the field" }]
-      : []),
-    { href: "/players", label: "Player Cards", desc: "Appearances, records & profiles" },
-    { href: "/history", label: "History",      desc: "Past cups and champions" },
-    { href: "/courses", label: "Courses",      desc: "Courses, tees & ratings" },
+    { href: "/draft/prep", label: "Draft Prep",   desc: "Indexes & course handicaps for the field" },
+    { href: "/players",    label: "Player Cards", desc: "Appearances, records & profiles" },
+    { href: "/history",    label: "History",      desc: "Past cups and champions" },
+    { href: "/courses",    label: "Courses",      desc: "Courses, tees & ratings" },
   ];
 
   const commissioner = [
