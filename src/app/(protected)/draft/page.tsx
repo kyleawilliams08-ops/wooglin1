@@ -2,6 +2,10 @@ import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { DraftRoom, type DraftView, type DraftTeam } from "@/components/DraftRoom";
+import { youTubeId } from "@/lib/chime";
+
+/** Default looping track for the TV cast (override with ?music=). */
+const DEFAULT_DRAFT_MUSIC = "bSLU1JX3vHc";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function DraftPage({
   searchParams,
 }: {
-  searchParams: { tv?: string };
+  searchParams: { tv?: string; music?: string };
 }) {
   const player = await requirePlayer();
   const supabase = createClient();
@@ -150,6 +154,12 @@ export default async function DraftPage({
   };
 
   const tv = searchParams.tv === "1";
+  // Looping background track for the TV cast. Override with ?music=<url|id>,
+  // or turn it off with ?music=off.
+  const musicId =
+    searchParams.music === "off"
+      ? null
+      : youTubeId(searchParams.music ?? "") ?? DEFAULT_DRAFT_MUSIC;
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -170,7 +180,7 @@ export default async function DraftPage({
           </span>
         </div>
       )}
-      <DraftRoom draft={view} tv={tv} />
+      <DraftRoom draft={view} tv={tv} musicId={musicId} />
     </div>
   );
 }

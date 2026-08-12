@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makePick, undoLastPick, startPlayerDraft } from "@/lib/draftActions";
-import { playDraftChime, unlockAudio } from "@/lib/chime";
+import { playDraftChime, playDraftTheme, unlockAudio } from "@/lib/chime";
 import { teamIndexForPick, pickLabel, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -88,7 +88,16 @@ function fmtClock(seconds: number): string {
  *  - complete: the recap board
  * ?tv=1 renders a chrome-free big-screen version for casting.
  */
-export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
+export function DraftRoom({
+  draft,
+  tv,
+  musicId,
+}: {
+  draft: DraftView;
+  tv: boolean;
+  /** YouTube id for the looping background player (TV view only) */
+  musicId?: string | null;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +148,20 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  // Theme song: fires once when the draft flips to live (not when you open a
+  // draft that's already running), and on demand from the Theme button.
+  const stopTheme = useRef<(() => void) | null>(null);
+  const prevStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const was = prevStatus.current;
+    prevStatus.current = draft.status;
+    if (was && was !== "live" && draft.status === "live" && soundOn) {
+      stopTheme.current?.();
+      stopTheme.current = playDraftTheme();
+    }
+  }, [draft.status, soundOn]);
+  useEffect(() => () => stopTheme.current?.(), []);
 
   // Soft pick clock — ticks locally off the server-set anchor.
   const [now, setNow] = useState(() => Date.now());
@@ -246,6 +269,26 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     </button>
   );
 
+  // Manual theme trigger — handy for kicking the room off, or replaying it.
+  const themeButton = (big: boolean) => (
+    <button
+      type="button"
+      onClick={async () => {
+        await unlockAudio();
+        setAudioUnlocked(true);
+        stopTheme.current?.();
+        stopTheme.current = playDraftTheme();
+      }}
+      className={
+        big
+          ? "rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
+          : "rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-navy/50"
+      }
+    >
+      🎺 Theme
+    </button>
+  );
+
   /* ---------- pick reveal overlay (phone + TV) ---------- */
   const revealOverlay = reveal && (
     <div
@@ -310,6 +353,21 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
   if (tv) {
     return (
       <div className="fixed inset-0 z-[900] overflow-y-auto bg-navy px-10 py-8">
+        {/* Background music — TV cast only. Kept visible (YouTube requires the
+            player be shown) but small and tucked into the bottom-left corner.
+            loop=1 needs playlist=<same id> to actually repeat. */}
+        {musicId && (
+          <div className="fixed bottom-3 left-3 z-[910] overflow-hidden rounded-lg opacity-70 shadow-lg transition-opacity hover:opacity-100">
+            <iframe
+              width="160"
+              height="90"
+              src={`https://www.youtube.com/embed/${musicId}?autoplay=1&loop=1&playlist=${musicId}&modestbranding=1&rel=0`}
+              title="Draft music"
+              allow="autoplay; encrypted-media"
+              className="block"
+            />
+          </div>
+        )}
         {revealOverlay}
         <div className="mx-auto max-w-5xl space-y-8">
           <div className="flex items-center justify-between">
@@ -329,6 +387,7 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
                 </span>
               )}
               {soundButton(true)}
+              {themeButton(true)}
               <Link
                 href="/draft"
                 className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
@@ -519,7 +578,7 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
 
       {/* Sound + TV mode */}
       <div className="flex flex-col items-center gap-2">
-        {soundButton(false)}
+        <span className="flex items-center gap-2">{soundButton(false)}{themeButton(false)}</span>
         <p className="text-center text-xs text-navy/40">
           Casting to a TV? <Link href="/draft?tv=1" className="underline underline-offset-2">Open TV mode</Link>
         </p>
