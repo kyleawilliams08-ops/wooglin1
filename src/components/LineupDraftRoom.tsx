@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makeLineupPick, undoLastLineupPick } from "@/lib/lineupDraftActions";
+import { playDraftChime, unlockAudio } from "@/lib/chime";
 import { teamIndexForPick, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -147,6 +148,47 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     return () => clearInterval(t);
   }, [draft.status]);
 
+  // Draft-night sound (see DraftRoom): unlock on first interaction.
+  const [soundOn, setSoundOn] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  useEffect(() => {
+    const unlock = async () => {
+      if (await unlockAudio()) setAudioUnlocked(true);
+    };
+    void unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  const soundButton = (big: boolean) => (
+    <button
+      type="button"
+      onClick={async () => {
+        const ok = await unlockAudio();
+        setAudioUnlocked(ok);
+        const next = !soundOn;
+        setSoundOn(next);
+        if (next && ok) playDraftChime(0.7);
+      }}
+      aria-label={soundOn ? "Mute draft sounds" : "Unmute draft sounds"}
+      className={
+        big
+          ? `rounded-full border px-4 py-2 text-base font-semibold ${
+              soundOn && audioUnlocked ? "border-gold/60 text-gold" : "border-white/30 text-white/60 hover:bg-white/10 hover:text-white"
+            }`
+          : `rounded-full border px-3 py-1 text-xs font-semibold ${
+              soundOn && audioUnlocked ? "border-gold bg-gold/20 text-navy" : "border-hairline text-navy/50"
+            }`
+      }
+    >
+      {soundOn ? (audioUnlocked ? "🔊 Sound on" : "🔇 Tap to enable sound") : "🔇 Sound off"}
+    </button>
+  );
+
   const ordered: [LineupTeam, LineupTeam] =
     draft.firstPickTeamId === draft.homeTeam.id
       ? [draft.homeTeam, draft.awayTeam]
@@ -196,6 +238,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     const data = buildReveal(draft.picks[pickCount - 1]);
     timers.current.forEach(clearTimeout);
     timers.current = [];
+    if (soundOn) playDraftChime();   // fanfare under "THE PICK IS IN"
     setReveal(data);
     setPhase("pickin");
     const pickinMs = 2400, revealMs = 2400, fightMs = tv ? 5200 : 3800;
@@ -207,7 +250,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
       timers.current.push(setTimeout(() => { setPhase(null); setReveal(null); }, pickinMs + revealMs));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickCount, tv]);
+  }, [pickCount, tv, soundOn]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -459,6 +502,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
               {draft.status === "live" && (
                 <span className="animate-pulse rounded-full bg-gold px-5 py-2 text-xl font-bold uppercase tracking-widest text-navy">Live</span>
               )}
+              {soundButton(true)}
               <Link href={`/matches/lineup-draft/${draft.roundId}`}
                 className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white">
                 ✕ Exit TV
@@ -593,9 +637,12 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
         </div>
       )}
 
-      <p className="text-center text-xs text-navy/40">
-        Casting to a TV? <Link href={`/matches/lineup-draft/${draft.roundId}?tv=1`} className="underline underline-offset-2">Open TV mode</Link>
-      </p>
+      <div className="flex flex-col items-center gap-2">
+        {soundButton(false)}
+        <p className="text-center text-xs text-navy/40">
+          Casting to a TV? <Link href={`/matches/lineup-draft/${draft.roundId}?tv=1`} className="underline underline-offset-2">Open TV mode</Link>
+        </p>
+      </div>
     </div>
   );
 }

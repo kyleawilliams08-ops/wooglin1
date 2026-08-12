@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makePick, undoLastPick, startPlayerDraft } from "@/lib/draftActions";
+import { playDraftChime, unlockAudio } from "@/lib/chime";
 import { teamIndexForPick, pickLabel, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -122,6 +123,23 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     return () => clearInterval(t);
   }, [router, draft.status]);
 
+  // Draft-night sound. Browsers block audio until a gesture, so unlock on the
+  // first interaction anywhere on the page (someone always taps to get here).
+  const [soundOn, setSoundOn] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  useEffect(() => {
+    const unlock = async () => {
+      if (await unlockAudio()) setAudioUnlocked(true);
+    };
+    void unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
   // Soft pick clock — ticks locally off the server-set anchor.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -149,6 +167,7 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     }
     if (pickCount > seenCount.current) {
       seenCount.current = pickCount;
+      if (soundOn) playDraftChime();   // fanfare lands with the reveal
       setReveal(draft.picks[pickCount - 1]);
       const t = setTimeout(() => setReveal(null), tv ? 5000 : 3200);
       return () => clearTimeout(t);
@@ -156,7 +175,7 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
     seenCount.current = pickCount;
     // draft.picks[pickCount-1] read intentionally; pickCount gates it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickCount, tv]);
+  }, [pickCount, tv, soundOn]);
 
   const nextPick = draft.picks.length + 1;
   const onClock = draft.teams[teamIndexForPick(nextPick)];
@@ -195,6 +214,37 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
   };
 
   const selectedPlayer = draft.pool.find((p) => p.participantId === selected) ?? null;
+
+  // Tap to mute/unmute; also doubles as the "enable sound" affordance when the
+  // browser hasn't handed us audio yet.
+  const soundButton = (big: boolean) => (
+    <button
+      type="button"
+      onClick={async () => {
+        const ok = await unlockAudio();
+        setAudioUnlocked(ok);
+        const next = !soundOn;
+        setSoundOn(next);
+        if (next && ok) playDraftChime(0.7); // preview so you know it works
+      }}
+      aria-label={soundOn ? "Mute draft sounds" : "Unmute draft sounds"}
+      className={
+        big
+          ? `rounded-full border px-4 py-2 text-base font-semibold ${
+              soundOn && audioUnlocked
+                ? "border-gold/60 text-gold"
+                : "border-white/30 text-white/60 hover:bg-white/10 hover:text-white"
+            }`
+          : `rounded-full border px-3 py-1 text-xs font-semibold ${
+              soundOn && audioUnlocked
+                ? "border-gold text-navy bg-gold/20"
+                : "border-hairline text-navy/50"
+            }`
+      }
+    >
+      {soundOn ? (audioUnlocked ? "🔊 Sound on" : "🔇 Tap to enable sound") : "🔇 Sound off"}
+    </button>
+  );
 
   /* ---------- pick reveal overlay (phone + TV) ---------- */
   const revealOverlay = reveal && (
@@ -278,6 +328,7 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
                   Live
                 </span>
               )}
+              {soundButton(true)}
               <Link
                 href="/draft"
                 className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
@@ -466,10 +517,13 @@ export function DraftRoom({ draft, tv }: { draft: DraftView; tv: boolean }) {
         </div>
       )}
 
-      {/* TV mode hint */}
-      <p className="text-center text-xs text-navy/40">
-        Casting to a TV? <Link href="/draft?tv=1" className="underline underline-offset-2">Open TV mode</Link>
-      </p>
+      {/* Sound + TV mode */}
+      <div className="flex flex-col items-center gap-2">
+        {soundButton(false)}
+        <p className="text-center text-xs text-navy/40">
+          Casting to a TV? <Link href="/draft?tv=1" className="underline underline-offset-2">Open TV mode</Link>
+        </p>
+      </div>
     </div>
   );
 }
