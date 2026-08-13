@@ -295,26 +295,6 @@ export function DraftRoom({
     </button>
   );
 
-  // Manual theme trigger — handy for kicking the room off, or replaying it.
-  const themeButton = (big: boolean) => (
-    <button
-      type="button"
-      onClick={async () => {
-        await unlockAudio();
-        setAudioUnlocked(true);
-        stopTheme.current?.();
-        stopTheme.current = playDraftTheme();
-      }}
-      className={
-        big
-          ? "rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
-          : "rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-navy/50"
-      }
-    >
-      🎺 Theme
-    </button>
-  );
-
   /* ---------- pick reveal overlay (phone + TV) ---------- */
   // Videos duck out while a pick reveal is on screen, then resume.
   const revealActive = reveal !== null;
@@ -422,20 +402,6 @@ export function DraftRoom({
                 >
                   <span className="block text-lg">{soundOn ? "🔊" : "🔇"}</span>
                   {soundOn ? (audioUnlocked ? "Sound" : "Enable") : "Muted"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await unlockAudio();
-                    setAudioUnlocked(true);
-                    stopTheme.current?.();
-                    stopTheme.current = playDraftTheme();
-                  }}
-                  className={rail(false)}
-                >
-                  <span className="block text-lg">🎺</span>
-                  Theme
                 </button>
 
                 {musicId && (
@@ -777,7 +743,7 @@ export function DraftRoom({
 
       {/* Sound + TV mode */}
       <div className="flex flex-col items-center gap-2">
-        <span className="flex items-center gap-2">{soundButton(false)}{themeButton(false)}</span>
+        {soundButton(false)}
         <p className="text-center text-xs text-navy/40">
           Casting to a TV? <Link href="/draft?tv=1" className="underline underline-offset-2">Open TV mode</Link>
         </p>
