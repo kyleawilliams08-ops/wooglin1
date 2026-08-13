@@ -7,6 +7,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makePick, undoLastPick, startPlayerDraft } from "@/lib/draftActions";
 import { playDraftChime, playDraftTheme, preloadPickSound, unlockAudio } from "@/lib/chime";
+import { YouTubePlayer } from "@/components/YouTubePlayer";
 import { teamIndexForPick, pickLabel, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -92,11 +93,14 @@ export function DraftRoom({
   draft,
   tv,
   musicId,
+  clipId,
 }: {
   draft: DraftView;
   tv: boolean;
-  /** YouTube id for the looping background player (TV view only) */
+  /** Pre-draft hype track — small, bottom-left (TV view only) */
   musicId?: string | null;
+  /** Between-picks clip — bigger, bottom-right, toggled on demand (TV only) */
+  clipId?: string | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
@@ -136,7 +140,10 @@ export function DraftRoom({
   // first interaction anywhere on the page (someone always taps to get here).
   const [soundOn, setSoundOn] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [showMusic, setShowMusic] = useState(true);
   const [musicCovered, setMusicCovered] = useState(false);
+  const [showClip, setShowClip] = useState(false);
+  const [clipCovered, setClipCovered] = useState(false);
   useEffect(() => {
     preloadPickSound();   // fetch the chime up front so pick 1 doesn't lag
     const unlock = async () => {
@@ -158,9 +165,12 @@ export function DraftRoom({
   useEffect(() => {
     const was = prevStatus.current;
     prevStatus.current = draft.status;
-    if (was && was !== "live" && draft.status === "live" && soundOn) {
-      stopTheme.current?.();
-      stopTheme.current = playDraftTheme();
+    if (was && was !== "live" && draft.status === "live") {
+      setMusicCovered(true);   // hype track is pre-draft only — tuck it away
+      if (soundOn) {
+        stopTheme.current?.();
+        stopTheme.current = playDraftTheme();
+      }
     }
   }, [draft.status, soundOn]);
   useEffect(() => () => stopTheme.current?.(), []);
@@ -306,6 +316,9 @@ export function DraftRoom({
   );
 
   /* ---------- pick reveal overlay (phone + TV) ---------- */
+  // Videos duck out while a pick reveal is on screen, then resume.
+  const revealActive = reveal !== null;
+
   const revealOverlay = reveal && (
     <div
       className="draft-reveal-bg fixed inset-0 z-[950] flex items-center justify-center px-8"
@@ -385,28 +398,105 @@ export function DraftRoom({
   if (tv) {
     return (
       <div className="fixed inset-0 z-[900] overflow-y-auto bg-navy px-10 py-8">
+        {/* Control rail — everything AV in one column down the left edge */}
+        <div className="fixed left-2 top-1/2 z-[920] flex -translate-y-1/2 flex-col gap-2">
+          {(() => {
+            const rail = (active: boolean) =>
+              `w-16 rounded-lg border px-1 py-2 text-center text-[11px] font-semibold leading-tight transition-colors ${
+                active
+                  ? "border-gold/70 bg-gold/15 text-gold"
+                  : "border-white/20 text-white/50 hover:bg-white/10 hover:text-white"
+              }`;
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await unlockAudio();
+                    setAudioUnlocked(ok);
+                    const next = !soundOn;
+                    setSoundOn(next);
+                    if (next && ok) playDraftChime(0.7);
+                  }}
+                  className={rail(soundOn && audioUnlocked)}
+                >
+                  <span className="block text-lg">{soundOn ? "🔊" : "🔇"}</span>
+                  {soundOn ? (audioUnlocked ? "Sound" : "Enable") : "Muted"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await unlockAudio();
+                    setAudioUnlocked(true);
+                    stopTheme.current?.();
+                    stopTheme.current = playDraftTheme();
+                  }}
+                  className={rail(false)}
+                >
+                  <span className="block text-lg">🎺</span>
+                  Theme
+                </button>
+
+                {musicId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!showMusic) { setShowMusic(true); setMusicCovered(false); }
+                      else setMusicCovered((v) => !v);
+                    }}
+                    className={rail(showMusic && !musicCovered)}
+                  >
+                    <span className="block text-lg">🎧</span>
+                    Hype
+                  </button>
+                )}
+
+                {clipId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!showClip) { setShowClip(true); setClipCovered(false); }
+                      else setClipCovered((v) => !v);
+                    }}
+                    className={rail(showClip && !clipCovered)}
+                  >
+                    <span className="block text-lg">🎬</span>
+                    Clip
+                  </button>
+                )}
+
+                {clipId && showClip && (
+                  <button type="button" onClick={() => setShowClip(false)} className={rail(false)}>
+                    <span className="block text-lg">⏹</span>
+                    Stop
+                  </button>
+                )}
+              </>
+            );
+          })()}
+        </div>
         {/* Background music — TV cast only. Kept visible (YouTube requires the
             player be shown) but small and tucked into the bottom-left corner.
             loop=1 needs playlist=<same id> to actually repeat. */}
-        {musicId && (
+        {/* Pre-draft hype track — small, bottom-left. Pauses during a reveal. */}
+        {musicId && showMusic && (
           <div className="fixed bottom-3 left-3 z-[910]">
             <div className="relative overflow-hidden rounded-lg shadow-lg">
-              <iframe
-                width="160"
-                height="90"
-                src={`https://www.youtube.com/embed/${musicId}?autoplay=1&loop=1&playlist=${musicId}&modestbranding=1&rel=0`}
-                title="Draft music"
-                allow="autoplay; encrypted-media"
+              <YouTubePlayer
+                videoId={musicId}
+                width={160}
+                height={90}
+                paused={revealActive}
                 className={`block transition-opacity ${musicCovered ? "opacity-0" : "opacity-70 hover:opacity-100"}`}
               />
-              {/* Cover: a navy panel matching the page background. Hover it for
-                  the ✕ to pull it back off. */}
+              {/* Cover: navy panel matching the page background; hover for the ✕. */}
               {musicCovered && (
                 <div className="group absolute inset-0 bg-navy">
                   <button
                     type="button"
                     onClick={() => setMusicCovered(false)}
-                    aria-label="Uncover the music player"
+                    aria-label="Uncover the hype player"
                     className="flex h-full w-full items-center justify-center text-lg text-white/0 transition-colors group-hover:text-white/70"
                   >
                     ✕
@@ -414,15 +504,33 @@ export function DraftRoom({
                 </div>
               )}
             </div>
-            {!musicCovered && (
-              <button
-                type="button"
-                onClick={() => setMusicCovered(true)}
-                className="mt-1 w-full rounded border border-white/20 py-0.5 text-[10px] font-semibold text-white/40 hover:bg-white/10 hover:text-white/80"
-              >
-                Cover
-              </button>
-            )}
+          </div>
+        )}
+
+        {/* Between-picks clip — bigger, bottom-right. Also pauses on a reveal. */}
+        {clipId && showClip && (
+          <div className="fixed bottom-3 right-3 z-[910]">
+            <div className="relative overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/20">
+              <YouTubePlayer
+                videoId={clipId}
+                width={360}
+                height={203}
+                paused={revealActive}
+                className={`block transition-opacity ${clipCovered ? "opacity-0" : ""}`}
+              />
+              {clipCovered && (
+                <div className="group absolute inset-0 bg-navy">
+                  <button
+                    type="button"
+                    onClick={() => setClipCovered(false)}
+                    aria-label="Uncover the clip"
+                    className="flex h-full w-full items-center justify-center text-xl text-white/0 transition-colors group-hover:text-white/70"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
         {revealOverlay}
@@ -443,8 +551,6 @@ export function DraftRoom({
                   Live
                 </span>
               )}
-              {soundButton(true)}
-              {themeButton(true)}
               <Link
                 href="/draft"
                 className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
@@ -468,6 +574,32 @@ export function DraftRoom({
               )}
               {overTime && (
                 <p className="mt-1 text-2xl font-semibold text-white/90">Taking their sweet time…</p>
+              )}
+            </div>
+          )}
+
+          {/* Pre-draft lobby — the room fills in here before it kicks off */}
+          {draft.status === "scheduled" && (
+            <div className="rounded-2xl border border-gold/50 bg-white/5 px-8 py-8 text-center">
+              <p className="text-xl font-semibold uppercase tracking-[0.3em] text-gold">Draft Day</p>
+              <p className="mt-3 font-display text-5xl font-bold text-off-white">
+                {draft.scheduled_at
+                  ? new Date(draft.scheduled_at).toLocaleDateString("en-US", {
+                      weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+                    })
+                  : "Standing by…"}
+              </p>
+              <p className="mt-3 text-2xl text-hairline/70">
+                {draft.pool.length} players in the pool · {draft.teams[0].name} picks first
+              </p>
+              {draft.viewerIsAdmin && (
+                <button
+                  onClick={start}
+                  disabled={isPending || draft.pool.length === 0}
+                  className="mt-6 rounded-xl bg-europe-green px-10 py-4 text-2xl font-bold text-white shadow-xl disabled:opacity-50"
+                >
+                  {isPending ? "Starting…" : "🐉 Start the Draft"}
+                </button>
               )}
             </div>
           )}

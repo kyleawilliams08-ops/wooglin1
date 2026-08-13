@@ -4,8 +4,10 @@ import Link from "next/link";
 import { DraftRoom, type DraftView, type DraftTeam } from "@/components/DraftRoom";
 import { youTubeId } from "@/lib/chime";
 
-/** Default looping track for the TV cast (override with ?music=). */
+/** Pre-draft hype track for the TV cast (override with ?music=). */
 const DEFAULT_DRAFT_MUSIC = "bSLU1JX3vHc";
+/** Between-picks clip (override with ?clip=). */
+const DEFAULT_DRAFT_CLIP = "MpP9IicoMyI";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function DraftPage({
   searchParams,
 }: {
-  searchParams: { tv?: string; music?: string };
+  searchParams: { tv?: string; music?: string; clip?: string };
 }) {
   const player = await requirePlayer();
   const supabase = createClient();
@@ -160,6 +162,11 @@ export default async function DraftPage({
     searchParams.music === "off"
       ? null
       : youTubeId(searchParams.music ?? "") ?? DEFAULT_DRAFT_MUSIC;
+  // Between-picks clip, bigger and bottom-right (?clip=<url|id>, off to hide)
+  const clipId =
+    searchParams.clip === "off"
+      ? null
+      : youTubeId(searchParams.clip ?? "") ?? DEFAULT_DRAFT_CLIP;
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -180,7 +187,7 @@ export default async function DraftPage({
           </span>
         </div>
       )}
-      <DraftRoom draft={view} tv={tv} musicId={musicId} />
+      <DraftRoom draft={view} tv={tv} musicId={musicId} clipId={clipId} />
     </div>
   );
 }
