@@ -166,9 +166,7 @@ export function DraftRoom({
     const was = prevStatus.current;
     prevStatus.current = draft.status;
     if (was && was !== "live" && draft.status === "live") {
-      // Hype track is pre-draft only. Unmount it (covering is visual only —
-      // the audio would keep playing behind the panel).
-      setShowMusic(false);
+      setMusicCovered(true);   // hype is pre-draft — hide it (⏹ Stop kills audio)
       if (soundOn) {
         stopTheme.current?.();
         stopTheme.current = playDraftTheme();
@@ -444,12 +442,11 @@ export function DraftRoom({
                   <button
                     type="button"
                     onClick={() => {
-                      // Toggle it on/off outright — unmounting is what actually
-                      // stops the audio (a cover only hides it).
-                      setShowMusic((v) => !v);
-                      setMusicCovered(false);
+                      // Cover / uncover only — audio keeps playing either way.
+                      if (!showMusic) { setShowMusic(true); setMusicCovered(false); }
+                      else setMusicCovered((v) => !v);
                     }}
-                    className={rail(showMusic)}
+                    className={rail(showMusic && !musicCovered)}
                   >
                     <span className="block text-lg">🎧</span>
                     Hype
@@ -470,8 +467,17 @@ export function DraftRoom({
                   </button>
                 )}
 
-                {clipId && showClip && (
-                  <button type="button" onClick={() => setShowClip(false)} className={rail(false)}>
+                {(showMusic || showClip) && (
+                  <button
+                    type="button"
+                    // Covering only hides — unmounting is what actually stops
+                    // the audio, so this is the real "kill it" control.
+                    onClick={() => {
+                      setShowMusic(false); setMusicCovered(false);
+                      setShowClip(false);  setClipCovered(false);
+                    }}
+                    className={rail(false)}
+                  >
                     <span className="block text-lg">⏹</span>
                     Stop
                   </button>
