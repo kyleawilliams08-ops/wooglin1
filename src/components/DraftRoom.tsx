@@ -136,6 +136,7 @@ export function DraftRoom({
   // first interaction anywhere on the page (someone always taps to get here).
   const [soundOn, setSoundOn] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [musicCovered, setMusicCovered] = useState(false);
   useEffect(() => {
     preloadPickSound();   // fetch the chime up front so pick 1 doesn't lag
     const unlock = async () => {
@@ -388,15 +389,40 @@ export function DraftRoom({
             player be shown) but small and tucked into the bottom-left corner.
             loop=1 needs playlist=<same id> to actually repeat. */}
         {musicId && (
-          <div className="fixed bottom-3 left-3 z-[910] overflow-hidden rounded-lg opacity-70 shadow-lg transition-opacity hover:opacity-100">
-            <iframe
-              width="160"
-              height="90"
-              src={`https://www.youtube.com/embed/${musicId}?autoplay=1&loop=1&playlist=${musicId}&modestbranding=1&rel=0`}
-              title="Draft music"
-              allow="autoplay; encrypted-media"
-              className="block"
-            />
+          <div className="fixed bottom-3 left-3 z-[910]">
+            <div className="relative overflow-hidden rounded-lg shadow-lg">
+              <iframe
+                width="160"
+                height="90"
+                src={`https://www.youtube.com/embed/${musicId}?autoplay=1&loop=1&playlist=${musicId}&modestbranding=1&rel=0`}
+                title="Draft music"
+                allow="autoplay; encrypted-media"
+                className={`block transition-opacity ${musicCovered ? "opacity-0" : "opacity-70 hover:opacity-100"}`}
+              />
+              {/* Cover: a navy panel matching the page background. Hover it for
+                  the ✕ to pull it back off. */}
+              {musicCovered && (
+                <div className="group absolute inset-0 bg-navy">
+                  <button
+                    type="button"
+                    onClick={() => setMusicCovered(false)}
+                    aria-label="Uncover the music player"
+                    className="flex h-full w-full items-center justify-center text-lg text-white/0 transition-colors group-hover:text-white/70"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+            {!musicCovered && (
+              <button
+                type="button"
+                onClick={() => setMusicCovered(true)}
+                className="mt-1 w-full rounded border border-white/20 py-0.5 text-[10px] font-semibold text-white/40 hover:bg-white/10 hover:text-white/80"
+              >
+                Cover
+              </button>
+            )}
           </div>
         )}
         {revealOverlay}
