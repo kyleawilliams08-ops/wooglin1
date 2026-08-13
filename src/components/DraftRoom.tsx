@@ -166,7 +166,9 @@ export function DraftRoom({
     const was = prevStatus.current;
     prevStatus.current = draft.status;
     if (was && was !== "live" && draft.status === "live") {
-      setMusicCovered(true);   // hype track is pre-draft only — tuck it away
+      // Hype track is pre-draft only. Unmount it (covering is visual only —
+      // the audio would keep playing behind the panel).
+      setShowMusic(false);
       if (soundOn) {
         stopTheme.current?.();
         stopTheme.current = playDraftTheme();
@@ -442,10 +444,12 @@ export function DraftRoom({
                   <button
                     type="button"
                     onClick={() => {
-                      if (!showMusic) { setShowMusic(true); setMusicCovered(false); }
-                      else setMusicCovered((v) => !v);
+                      // Toggle it on/off outright — unmounting is what actually
+                      // stops the audio (a cover only hides it).
+                      setShowMusic((v) => !v);
+                      setMusicCovered(false);
                     }}
-                    className={rail(showMusic && !musicCovered)}
+                    className={rail(showMusic)}
                   >
                     <span className="block text-lg">🎧</span>
                     Hype
@@ -483,11 +487,11 @@ export function DraftRoom({
         {musicId && showMusic && (
           <div className="fixed bottom-3 left-3 z-[910]">
             <div className="relative overflow-hidden rounded-lg shadow-lg">
+              {/* No auto-pause here — only the clip ducks for picks. */}
               <YouTubePlayer
                 videoId={musicId}
                 width={160}
                 height={90}
-                paused={revealActive}
                 className={`block transition-opacity ${musicCovered ? "opacity-0" : "opacity-70 hover:opacity-100"}`}
               />
               {/* Cover: navy panel matching the page background; hover for the ✕. */}
