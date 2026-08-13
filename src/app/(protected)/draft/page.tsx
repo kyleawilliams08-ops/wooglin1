@@ -7,7 +7,7 @@ import { youTubeId } from "@/lib/chime";
 /** Pre-draft hype track for the TV cast (override with ?music=). */
 const DEFAULT_DRAFT_MUSIC = "bSLU1JX3vHc";
 /** Between-picks clip (override with ?clip=). */
-const DEFAULT_DRAFT_CLIP = "B2bPXwBl8qw";
+const DEFAULT_DRAFT_CLIP = "gIIEObfa9ds";
 
 export const dynamic = "force-dynamic";
 
