@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makeLineupPick, undoLastLineupPick } from "@/lib/lineupDraftActions";
-import { playDraftChime, unlockAudio } from "@/lib/chime";
+import { playDraftChime, preloadPickSound, unlockAudio } from "@/lib/chime";
 import { teamIndexForPick, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -152,6 +152,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
   const [soundOn, setSoundOn] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   useEffect(() => {
+    preloadPickSound();
     const unlock = async () => {
       if (await unlockAudio()) setAudioUnlocked(true);
     };
@@ -241,7 +242,9 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
     if (soundOn) playDraftChime();   // fanfare under "THE PICK IS IN"
     setReveal(data);
     setPhase("pickin");
-    const pickinMs = 2400, revealMs = 2400, fightMs = tv ? 5200 : 3800;
+    // "THE PICK IS IN" holds for the chime's length so names land as it ends.
+    const pickinMs = soundOn ? 5300 : 2400;
+    const revealMs = 2400, fightMs = tv ? 5200 : 3800;
     timers.current.push(setTimeout(() => setPhase("reveal"), pickinMs));
     if (data.fight) {
       timers.current.push(setTimeout(() => setPhase("fight"), pickinMs + revealMs));

@@ -98,11 +98,44 @@ function thump(c: AudioContext, out: AudioNode, start: number) {
   osc.stop(start + 0.6);
 }
 
-/**
- * Play the fanfare (~1.9s). No-ops silently if audio is still locked, so a
- * missed unlock never throws in the middle of a reveal.
- */
+// ── Pick sound ────────────────────────────────────────────────────────────
+// Kyle supplied /public/draft-chime.mp3 for the pick reveal. Preloaded and
+// reused so the first pick doesn't lag; falls back to the synth fanfare below
+// if the file is missing or won't play.
+
+let pickAudio: HTMLAudioElement | null = null;
+
+export function preloadPickSound(): void {
+  if (typeof window === "undefined" || pickAudio) return;
+  pickAudio = new Audio("/draft-chime.mp3");
+  pickAudio.preload = "auto";
+  pickAudio.load();
+}
+
+/** The pick sound: the supplied chime, or the synth fanfare as a backstop. */
 export function playDraftChime(volume = 1): void {
+  if (typeof window !== "undefined") {
+    if (!pickAudio) preloadPickSound();
+    if (pickAudio) {
+      try {
+        pickAudio.pause();
+        pickAudio.currentTime = 0;
+        pickAudio.volume = Math.max(0, Math.min(1, volume));
+        void pickAudio.play().catch(() => synthChime(volume));
+        return;
+      } catch {
+        // fall through to the synth
+      }
+    }
+  }
+  synthChime(volume);
+}
+
+/**
+ * Synthesized fanfare (~1.9s) — the fallback if the mp3 can't play. No-ops
+ * silently if audio is still locked, so a missed unlock never throws mid-reveal.
+ */
+export function synthChime(volume = 1): void {
   const c = getCtx();
   if (!c || c.state !== "running") return;
 

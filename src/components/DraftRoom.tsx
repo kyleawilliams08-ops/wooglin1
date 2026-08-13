@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { makePick, undoLastPick, startPlayerDraft } from "@/lib/draftActions";
-import { playDraftChime, playDraftTheme, unlockAudio } from "@/lib/chime";
+import { playDraftChime, playDraftTheme, preloadPickSound, unlockAudio } from "@/lib/chime";
 import { teamIndexForPick, pickLabel, clockRemaining } from "@/lib/draft";
 import { formatHcp } from "@/lib/handicap";
 
@@ -137,6 +137,7 @@ export function DraftRoom({
   const [soundOn, setSoundOn] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   useEffect(() => {
+    preloadPickSound();   // fetch the chime up front so pick 1 doesn't lag
     const unlock = async () => {
       if (await unlockAudio()) setAudioUnlocked(true);
     };
@@ -182,7 +183,9 @@ export function DraftRoom({
   // board; undo/reset lower the count, so the next pick reveals fresh.
   const pickCount = draft.picks.length;
   const [reveal, setReveal] = useState<DraftPickView | null>(null);
+  const [revealPhase, setRevealPhase] = useState<"pickin" | "name">("pickin");
   const seenCount = useRef<number | null>(null);
+  const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
     if (seenCount.current === null) {
       seenCount.current = pickCount; // first render — baseline, don't replay
@@ -190,15 +193,27 @@ export function DraftRoom({
     }
     if (pickCount > seenCount.current) {
       seenCount.current = pickCount;
-      if (soundOn) playDraftChime();   // fanfare lands with the reveal
+      if (soundOn) playDraftChime();
+
+      // "THE PICK IS IN" holds for the length of the chime (5.33s), then the
+      // name drops as it finishes — NFL-draft cadence.
+      const PICKIN_MS = soundOn ? 5300 : 1800;
+      const NAME_MS = tv ? 5000 : 3600;
+
+      revealTimers.current.forEach(clearTimeout);
+      revealTimers.current = [];
       setReveal(draft.picks[pickCount - 1]);
-      const t = setTimeout(() => setReveal(null), tv ? 5000 : 3200);
-      return () => clearTimeout(t);
+      setRevealPhase("pickin");
+      revealTimers.current.push(setTimeout(() => setRevealPhase("name"), PICKIN_MS));
+      revealTimers.current.push(setTimeout(() => setReveal(null), PICKIN_MS + NAME_MS));
+      return;
     }
     seenCount.current = pickCount;
     // draft.picks[pickCount-1] read intentionally; pickCount gates it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickCount, tv, soundOn]);
+
+  useEffect(() => () => revealTimers.current.forEach(clearTimeout), []);
 
   const nextPick = draft.picks.length + 1;
   const onClock = draft.teams[teamIndexForPick(nextPick)];
@@ -295,23 +310,39 @@ export function DraftRoom({
       className="draft-reveal-bg fixed inset-0 z-[950] flex items-center justify-center px-8"
       style={{ backgroundColor: `${teamOf(reveal.team_id).color}F2` }}
     >
-      <div className="draft-reveal-card flex flex-col items-center text-center">
-        <p className="text-sm font-bold uppercase tracking-[0.3em] text-white/70">
-          {pickLabel(reveal.pick_number)}
-        </p>
-        <Avatar
-          url={reveal.avatarUrl}
-          name={reveal.name}
-          color="#0C2D55"
-          className={`${tv ? "h-48 w-48 text-6xl" : "h-32 w-32 text-4xl"} mt-5 shrink-0 ring-4 ring-gold shadow-2xl`}
-        />
-        <p className={`draft-reveal-name mt-5 font-display font-bold text-white ${tv ? "text-7xl" : "text-4xl"}`}>
-          {reveal.name}
-        </p>
-        <p className={`draft-reveal-name mt-2 font-semibold uppercase tracking-widest text-gold ${tv ? "text-2xl" : "text-sm"}`}>
-          {teamOf(reveal.team_id).name}
-        </p>
-      </div>
+      {revealPhase === "pickin" ? (
+        // Held while the chime plays — no name yet.
+        <div className="draft-reveal-card flex flex-col items-center text-center">
+          <p className={`font-bold uppercase tracking-[0.4em] text-white/80 ${tv ? "text-4xl" : "text-xl"}`}>
+            The pick is in
+          </p>
+          <p className={`mt-5 font-display font-bold uppercase tracking-widest text-gold ${tv ? "text-7xl" : "text-4xl"}`}>
+            {teamOf(reveal.team_id).name}
+          </p>
+          <p className={`mt-4 font-semibold uppercase tracking-[0.3em] text-white/50 ${tv ? "text-xl" : "text-xs"}`}>
+            {pickLabel(reveal.pick_number)}
+          </p>
+        </div>
+      ) : (
+        // Chime's done — drop the name.
+        <div className="draft-reveal-card flex flex-col items-center text-center">
+          <p className="text-sm font-bold uppercase tracking-[0.3em] text-white/70">
+            {pickLabel(reveal.pick_number)}
+          </p>
+          <Avatar
+            url={reveal.avatarUrl}
+            name={reveal.name}
+            color="#0C2D55"
+            className={`${tv ? "h-48 w-48 text-6xl" : "h-32 w-32 text-4xl"} mt-5 shrink-0 ring-4 ring-gold shadow-2xl`}
+          />
+          <p className={`draft-reveal-name mt-5 font-display font-bold text-white ${tv ? "text-7xl" : "text-4xl"}`}>
+            {reveal.name}
+          </p>
+          <p className={`draft-reveal-name mt-2 font-semibold uppercase tracking-widest text-gold ${tv ? "text-2xl" : "text-sm"}`}>
+            {teamOf(reveal.team_id).name}
+          </p>
+        </div>
+      )}
     </div>
   );
 
