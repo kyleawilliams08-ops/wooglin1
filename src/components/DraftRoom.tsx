@@ -345,28 +345,28 @@ export function DraftRoom({
     <div className="grid grid-cols-2 gap-3">
       {draft.teams.map((team) => (
         <div key={team.id} className={`overflow-hidden rounded-xl border ${tv ? "border-white/20" : "border-hairline bg-white"}`}>
-          <div className="px-3 py-2 text-white" style={{ backgroundColor: team.color }}>
-            <p className={`font-display font-bold leading-tight ${tv ? "text-3xl" : "text-base"}`}>{team.name}</p>
-            <p className={`${tv ? "text-base" : "text-[11px]"} text-white/70`}>
+          <div className={`${tv ? "px-4 py-3" : "px-3 py-2"} text-white`} style={{ backgroundColor: team.color }}>
+            <p className={`font-display font-bold leading-tight ${tv ? "text-5xl" : "text-base"}`}>{team.name}</p>
+            <p className={`${tv ? "text-xl" : "text-[11px]"} text-white/70`}>
               Capt. {team.captainName ?? "TBD"}
               {draft.status !== "complete" && team.id === draft.teams[0].id && " · 1st pick"}
             </p>
           </div>
           <ul className={tv ? "divide-y divide-white/10" : "divide-y divide-hairline"}>
             {picksFor(team.id).map((p) => (
-              <li key={p.id} className={`draft-row-in flex items-center gap-2 px-3 ${tv ? "py-2.5" : "py-2"}`}>
-                <span className={`${tv ? "text-lg" : "text-[10px]"} w-7 shrink-0 font-bold tabular-nums ${tv ? "text-white/50" : "text-navy/40"}`}>
+              <li key={p.id} className={`draft-row-in flex items-center gap-2 px-4 ${tv ? "py-3.5" : "py-2"}`}>
+                <span className={`${tv ? "text-2xl" : "text-[10px]"} w-9 shrink-0 font-bold tabular-nums ${tv ? "text-white/50" : "text-navy/40"}`}>
                   {p.pick_number}
                 </span>
                 <Avatar url={p.avatarUrl} name={p.name} color={team.color}
-                  className={tv ? "h-10 w-10 shrink-0 text-sm" : "h-7 w-7 shrink-0 text-[10px]"} />
-                <span className={`truncate font-semibold ${tv ? "text-2xl text-white" : "text-sm text-navy"}`}>
+                  className={tv ? "h-14 w-14 shrink-0 text-lg" : "h-7 w-7 shrink-0 text-[10px]"} />
+                <span className={`truncate font-semibold ${tv ? "text-4xl text-white" : "text-sm text-navy"}`}>
                   {p.name}
                 </span>
               </li>
             ))}
             {picksFor(team.id).length === 0 && (
-              <li className={`px-3 py-3 ${tv ? "text-lg text-white/40" : "text-xs text-navy/40"}`}>No picks yet</li>
+              <li className={`px-4 py-4 ${tv ? "text-2xl text-white/40" : "text-xs text-navy/40"}`}>No picks yet</li>
             )}
           </ul>
         </div>
@@ -382,7 +382,7 @@ export function DraftRoom({
         <div className="fixed left-2 top-1/2 z-[920] flex -translate-y-1/2 flex-col gap-2">
           {(() => {
             const rail = (active: boolean) =>
-              `w-16 rounded-lg border px-1 py-2 text-center text-[11px] font-semibold leading-tight transition-colors ${
+              `w-24 rounded-lg border px-2 py-3 text-center text-sm font-semibold leading-tight transition-colors ${
                 active
                   ? "border-gold/70 bg-gold/15 text-gold"
                   : "border-white/20 text-white/50 hover:bg-white/10 hover:text-white"
@@ -462,8 +462,8 @@ export function DraftRoom({
               {/* No auto-pause here — only the clip ducks for picks. */}
               <YouTubePlayer
                 videoId={musicId}
-                width={160}
-                height={90}
+                width={220}
+                height={124}
                 className={`block transition-opacity ${musicCovered ? "opacity-0" : "opacity-70 hover:opacity-100"}`}
               />
               {/* Cover: navy panel matching the page background; hover for the ✕. */}
@@ -489,8 +489,8 @@ export function DraftRoom({
             <div className="relative overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/20">
               <YouTubePlayer
                 videoId={clipId}
-                width={360}
-                height={203}
+                width={640}
+                height={360}
                 paused={revealActive}
                 className={`block transition-opacity ${clipCovered ? "opacity-0" : ""}`}
               />
@@ -510,26 +510,26 @@ export function DraftRoom({
           </div>
         )}
         {revealOverlay}
-        <div className="mx-auto max-w-5xl space-y-8">
+        <div className="mx-auto max-w-[1600px] space-y-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Image src="/crest-small.png" alt="" width={72} height={72} />
+              <Image src="/crest-small.png" alt="" width={96} height={96} />
               <div>
-                <h1 className="font-display text-5xl font-bold text-off-white">
+                <h1 className="font-display text-7xl font-bold text-off-white">
                   {draft.eventYear} Wooglin Cup Draft
                 </h1>
-                <p className="mt-1 text-xl text-hairline/70">{draft.eventName}</p>
+                <p className="mt-1 text-3xl text-hairline/70">{draft.eventName}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               {draft.status === "live" && (
-                <span className="animate-pulse rounded-full bg-gold px-5 py-2 text-xl font-bold uppercase tracking-widest text-navy">
+                <span className="animate-pulse rounded-full bg-gold px-7 py-3 text-3xl font-bold uppercase tracking-widest text-navy">
                   Live
                 </span>
               )}
               <Link
                 href="/draft"
-                className="rounded-full border border-white/30 px-4 py-2 text-base font-semibold text-white/60 hover:bg-white/10 hover:text-white"
+                className="rounded-full border border-white/30 px-6 py-3 text-xl font-semibold text-white/60 hover:bg-white/10 hover:text-white"
               >
                 ✕ Exit TV
               </Link>
@@ -537,19 +537,19 @@ export function DraftRoom({
           </div>
 
           {draft.status === "live" && (
-            <div className="rounded-2xl px-8 py-6 text-center" style={{ backgroundColor: onClock.color }}>
-              <p className="text-xl font-semibold uppercase tracking-[0.3em] text-white/70">On the clock</p>
-              <p className="mt-2 font-display text-6xl font-bold text-white">{onClock.name}</p>
-              <p className="mt-1 text-2xl text-white/80">
+            <div className="rounded-2xl px-10 py-10 text-center" style={{ backgroundColor: onClock.color }}>
+              <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-white/70">On the clock</p>
+              <p className="mt-3 font-display text-8xl font-bold text-white">{onClock.name}</p>
+              <p className="mt-2 text-4xl text-white/80">
                 {pickLabel(nextPick)} · Capt. {onClock.captainName ?? "TBD"}
               </p>
               {remaining !== null && (
-                <p className={`mt-3 font-mono text-7xl font-bold tabular-nums ${overTime ? "animate-pulse text-usa-red" : "text-gold"}`}>
+                <p className={`mt-4 font-mono text-9xl font-bold tabular-nums ${overTime ? "animate-pulse text-usa-red" : "text-gold"}`}>
                   {fmtClock(remaining)}
                 </p>
               )}
               {overTime && (
-                <p className="mt-1 text-2xl font-semibold text-white/90">Taking their sweet time…</p>
+                <p className="mt-2 text-3xl font-semibold text-white/90">Taking their sweet time…</p>
               )}
             </div>
           )}
@@ -590,7 +590,7 @@ export function DraftRoom({
           {board}
 
           {draft.status === "live" && draft.pool.length > 0 && (
-            <p className="text-center text-2xl text-hairline/70">
+            <p className="text-center text-3xl text-hairline/70">
               {draft.pool.length} player{draft.pool.length === 1 ? "" : "s"} left in the pool
             </p>
           )}
