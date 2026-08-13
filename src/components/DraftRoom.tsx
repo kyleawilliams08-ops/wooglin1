@@ -458,7 +458,9 @@ export function DraftRoom({
         {/* Pre-draft hype track — small, bottom-left. Pauses during a reveal. */}
         {musicId && showMusic && (
           <div className="fixed bottom-3 left-3 z-[910]">
-            <div className="relative overflow-hidden rounded-lg shadow-lg">
+            <div className={`relative overflow-hidden ${
+              musicCovered ? "" : "rounded-lg shadow-lg"
+            }`}>
               {/* No auto-pause here — only the clip ducks for picks. */}
               <YouTubePlayer
                 videoId={musicId}
@@ -486,7 +488,10 @@ export function DraftRoom({
         {/* Between-picks clip — bigger, bottom-right. Also pauses on a reveal. */}
         {clipId && showClip && (
           <div className="fixed bottom-3 right-3 z-[910]">
-            <div className="relative overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/20">
+            {/* Frame drops away when covered so it vanishes into the navy */}
+            <div className={`relative overflow-hidden ${
+              clipCovered ? "" : "rounded-lg shadow-2xl ring-1 ring-white/20"
+            }`}>
               <YouTubePlayer
                 videoId={clipId}
                 width={896}

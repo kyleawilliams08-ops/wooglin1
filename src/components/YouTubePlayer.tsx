@@ -100,5 +100,11 @@ export function YouTubePlayer({
     } catch { /* player torn down mid-transition */ }
   }, [paused, ready]);
 
-  return <div ref={hostRef} className={className} />;
+  // YT.Player REPLACES the element it's handed, so the host div can't carry
+  // our styling — wrap it and style the wrapper instead.
+  return (
+    <div className={className} style={{ width, height }}>
+      <div ref={hostRef} />
+    </div>
+  );
 }
