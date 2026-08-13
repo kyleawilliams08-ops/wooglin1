@@ -302,7 +302,7 @@ export function DraftRoom({
   const revealOverlay = reveal && (
     <div
       className="draft-reveal-bg fixed inset-0 z-[950] flex items-center justify-center px-8"
-      style={{ backgroundColor: `${teamOf(reveal.team_id).color}F2` }}
+      style={{ backgroundColor: teamOf(reveal.team_id).color }}
     >
       {revealPhase === "pickin" ? (
         // Held while the chime plays — no name yet.

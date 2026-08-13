@@ -298,7 +298,7 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
   // ── Reveal overlay (shared by phone + TV) ───────────────────────────────
   const overlay = reveal && phase && (
     <div className="draft-reveal-bg fixed inset-0 z-[950] flex items-center justify-center px-8"
-      style={{ backgroundColor: phase === "fight" ? "#0C2D55F7" : `${reveal.teamColor}F2` }}>
+      style={{ backgroundColor: phase === "fight" ? "#0C2D55" : reveal.teamColor }}>
       {phase === "pickin" && (
         <div className="draft-reveal-card text-center">
           <p className={`font-bold uppercase tracking-[0.4em] text-white/80 ${tv ? "text-3xl" : "text-lg"}`}>
