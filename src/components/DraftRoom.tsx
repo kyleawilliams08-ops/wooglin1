@@ -489,8 +489,8 @@ export function DraftRoom({
             <div className="relative overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/20">
               <YouTubePlayer
                 videoId={clipId}
-                width={640}
-                height={360}
+                width={896}
+                height={504}
                 paused={revealActive}
                 className={`block transition-opacity ${clipCovered ? "opacity-0" : ""}`}
               />
