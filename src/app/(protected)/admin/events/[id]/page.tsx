@@ -238,6 +238,41 @@ export default async function EventDetailPage({
     revalidatePath(`/admin/events/${params.id}`);
   }
 
+  // Reorder: swap with the neighbour, then renumber the whole list 1..n.
+  // (event_id, round_number) is unique and not deferrable, so the renumber
+  // goes in two passes — park everything at +1000, then write the final
+  // numbers. A failure mid-way leaves rounds at 1000+, which is obvious on
+  // the page and fixed by any further move.
+  async function moveRound(formData: FormData) {
+    "use server";
+    const supabase = createClient();
+    const back = `/admin/events/${params.id}`;
+    const roundId = formData.get("round_id") as string;
+    const dir = formData.get("dir") === "up" ? -1 : 1;
+
+    const { data: rows, error: readErr } = await supabase
+      .from("rounds").select("id, round_number").eq("event_id", params.id).order("round_number");
+    failTo(back, readErr);
+    const order = (rows ?? []).map((r) => r.id);
+    const i = order.indexOf(roundId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+
+    for (const pass of [1000, 0]) {
+      const results = await Promise.all(
+        order.map((id, idx) =>
+          supabase.from("rounds").update({ round_number: pass + idx + 1 }).eq("id", id),
+        ),
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) failTo(back, failed.error);
+    }
+    revalidatePath(back);
+    revalidatePath("/matches");
+    redirect(`${back}?saved=1`);
+  }
+
   async function deleteRound(formData: FormData) {
     "use server";
     const supabase = createClient();
@@ -519,9 +554,26 @@ export default async function EventDetailPage({
         {rounds.length === 0 && (
           <p className="text-sm text-navy/40">No rounds added yet.</p>
         )}
-        {rounds.map((r) => (
+        {rounds.map((r, idx) => (
           <div key={r.id} className="flex items-center justify-between rounded-xl border border-hairline bg-white px-4 py-3">
-            <div>
+            <div className="flex items-center gap-3">
+              {/* Reorder arrows — renumbers the rounds */}
+              <div className="flex flex-col">
+                {(["up", "down"] as const).map((dir) => {
+                  const disabled = dir === "up" ? idx === 0 : idx === rounds.length - 1;
+                  return (
+                    <form key={dir} action={moveRound}>
+                      <input type="hidden" name="round_id" value={r.id} />
+                      <input type="hidden" name="dir" value={dir} />
+                      <button type="submit" disabled={disabled} aria-label={`Move round ${dir}`}
+                        className="block px-1 text-xs leading-4 text-navy/40 hover:text-navy disabled:opacity-20 disabled:hover:text-navy/40">
+                        {dir === "up" ? "▲" : "▼"}
+                      </button>
+                    </form>
+                  );
+                })}
+              </div>
+              <div>
               <p className="font-semibold text-navy">
                 Round {r.round_number}{r.name ? ` — ${r.name}` : ""}
               </p>
@@ -529,6 +581,7 @@ export default async function EventDetailPage({
                 {r.course_tees?.courses?.name} · {r.course_tees?.tee_name} Tees · {sideLabel[r.side]} · {r.formats?.name}
                 {r.played_at ? ` · ${r.played_at}` : ""}
               </p>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <Link href={`/admin/events/${params.id}/rounds/${r.id}/matchups`}
