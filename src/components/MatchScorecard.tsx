@@ -9,6 +9,7 @@ import {
   computeHoleResults,
   strokesOnHole,
   isOneScoreFormat,
+  effectiveFormat,
   type GrossScores,
 } from "@/lib/matchcalc";
 import { matchOutcome, outcomeBadge } from "@/lib/matchplay";
@@ -62,6 +63,7 @@ export async function MatchScorecard({
     .from("matchups")
     .select(`
       id, round_id, match_number, status, result, match_score,
+      formats(id, name, hcp_allowance, hcp_allowance_secondary),
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name, player_id),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name, player_id),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name, player_id),
@@ -72,6 +74,7 @@ export async function MatchScorecard({
   const matchup = matchupRaw as unknown as {
     id: string; round_id: string; match_number: number; status: string;
     result: string | null; match_score: string | null;
+    formats: { id: string; name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
   if (!matchup) redirect(backHref);
@@ -89,7 +92,9 @@ export async function MatchScorecard({
   } | null;
   if (!round?.formats) redirect(backHref);
 
-  const fmt = round.formats!;
+  // The match may override the round format (3-man Shamble, etc.)
+  const fmt = effectiveFormat(matchup.formats, round.formats)!;
+  const formatOverridden = !!matchup.formats && matchup.formats.name !== round.formats?.name;
   const eventId = round.event_id;
   const nineHole = round.side !== "full";
   const pct  = fmt.hcp_allowance;
@@ -274,7 +279,7 @@ export async function MatchScorecard({
           </h1>
           <p className="text-xs text-navy/50 mt-0.5">
             {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
-            {sideLabel[round.side]} · {fmt.name}
+            {sideLabel[round.side]} · {fmt.name}{formatOverridden ? " (this match)" : ""}
           </p>
         </div>
         {hbhHref && !reviewing && (

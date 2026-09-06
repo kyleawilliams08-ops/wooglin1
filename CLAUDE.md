@@ -60,7 +60,7 @@ event_participants(id, event_id, player_id?, team_id, display_name, is_captain)
 courses / course_tees(rating, slope, par) / holes(hole_number, par, stroke_index)
 formats(name, hcp_allowance, hcp_allowance_secondary)  -- Best Ball 100, Shamble 70, Pinehurst 50, Scramble 35+15, Singles 100
 rounds(id, event_id, round_number, name, side[front/back/full], played_at, course_tee_id, format_id, status)
-matchups(id, round_id, match_number, home/away_p1/p2_id → event_participants, tee_time, status, result[home/away/halve], match_score)
+matchups(id, round_id, match_number, home/away_p1/p2_id → event_participants, tee_time, status, result[home/away/halve], match_score, format_id?)  -- format_id = per-match override of the round format (NULL = inherit); same team_size only
 hole_scores(matchup_id, hole_number, home_p1_gross, home_p2_gross, away_p1_gross, away_p2_gross)  -- GROSS per ball
 participant_handicaps(event_id, player_id, course_tee_id, calculated_hcp, override_hcp)  -- integers
 player_appearances(player_id, year, result[W/L/T])  -- 2014+ backfill, drives Appearances/Cup Record
@@ -79,7 +79,7 @@ ctp_claims(id, ctp_id, participant_id, claimed_by, created_at)  -- claim-chain h
 ## Key modules
 
 - `src/lib/handicap.ts` — pure engine + tests. Course hcp, playing hcp (9-hole halves CH first), `strokesGivenOnHole(phcp, si, holesInRound)` (9-hole wraps at 9!), `normalizeToLowest`, format helpers. **Plus handicaps stored negative, displayed "+2"** — `formatHcp` / `parseHcpInput` everywhere handicaps are shown/entered.
-- `src/lib/matchcalc.ts` — per-matchup playing hcps by format + per-hole results (shared by scorecard, live board, hole-by-hole).
+- `src/lib/matchcalc.ts` — per-matchup playing hcps by format + per-hole results (shared by scorecard, live board, hole-by-hole). **`effectiveFormat(matchup.formats, round.formats)`** resolves the format a match is actually played under — the round's is the default, `matchups.format_id` overrides it (a 3-man group doing Shamble, one group agreeing to Best Ball). Every consumer that computes strokes or names the format goes through it (matches cards, live scorer, scorecard, feed, print, fight card). Set from the matchup edit page (admin, or either captain until underway); options are limited to formats with the round's `team_size` — Singles ↔ 2-man is not offered. Deviating matches get a gold badge on /matches and the Tee Times admin list.
 - `src/lib/matchplay.ts` — match-play outcome with proper closeout ("2&1", dormie, halved).
 - `src/lib/scoring.ts` — `assertCanScore` (admin OR match participant), score upserts.
 - `src/components/MatchScorecard.tsx` — full card (admin route + `/live/match/[id]?view=card`), Save & Review → complete flow (writes status/result/match_score).

@@ -6,7 +6,7 @@ import { CardMenu } from "@/components/CardMenu";
 import { StartLineupDraftButton } from "@/components/StartLineupDraftButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { CtpClaimButton } from "@/components/CtpClaimButton";
-import { computePlayingHcps, computeHoleResults, type GrossScores } from "@/lib/matchcalc";
+import { computePlayingHcps, computeHoleResults, effectiveFormat, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
@@ -147,6 +147,7 @@ export default async function MatchesPage({
         .select(`
           id, round_id, match_number, status, result, match_score, tee_time,
           home_p1_id, home_p2_id, away_p1_id, away_p2_id,
+          formats(name, hcp_allowance, hcp_allowance_secondary),
           home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name, player_id),
           home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name, player_id),
           away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name, player_id),
@@ -161,6 +162,7 @@ export default async function MatchesPage({
     home_p1_id: string | null; home_p2_id: string | null;
     away_p1_id: string | null; away_p2_id: string | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
+    formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
   }[];
 
   // Holes per tee (for live standings)
@@ -203,6 +205,7 @@ export default async function MatchesPage({
 
   type MatchState = {
     matchup: (typeof matchups)[number];
+    formatBadge: string | null; // set when the match deviates from the round format
     chip: string;
     chipColor: string | null;
     final: boolean;
@@ -213,12 +216,14 @@ export default async function MatchesPage({
   let homeTotal = 0, awayTotal = 0;
 
   for (const round of rounds) {
-    const fmt = round.formats;
     const nineHole = round.side !== "full";
     const relevant = new Set(holeNums(round.side));
     const holes = (holesByTee[round.course_tee_id] ?? []).filter((h) => relevant.has(h.hole_number));
 
     for (const m of matchups.filter((x) => x.round_id === round.id)) {
+      // A match can override the round format (3-man Shamble, etc.)
+      const fmt = effectiveFormat(m.formats, round.formats);
+      const formatBadge = m.formats && m.formats.name !== round.formats?.name ? m.formats.name : null;
       let state: MatchState;
 
       if (m.status === "complete" && m.result) {
@@ -231,7 +236,7 @@ export default async function MatchesPage({
           : `${abbrev(m.result === "home" ? homeLabel : awayLabel)} wins${m.match_score ? ` ${m.match_score}` : ""}`;
         const chipColor = m.result === "home" ? homeTeam?.color ?? null
           : m.result === "away" ? awayTeam?.color ?? null : null;
-        state = { matchup: m, chip, chipColor, final: true, underway: true };
+        state = { matchup: m, formatBadge, chip, chipColor, final: true, underway: true };
 
       } else if (fmt && holes.length > 0) {
         const phcps = computePlayingHcps(fmt, {
@@ -244,7 +249,7 @@ export default async function MatchesPage({
         const o = matchOutcome(results, holes.length);
 
         if (o.result === null) {
-          state = { matchup: m, chip: fmtTeeTime(m.tee_time) ?? "Not started", chipColor: null, final: false, underway: false };
+          state = { matchup: m, formatBadge, chip: fmtTeeTime(m.tee_time) ?? "Not started", chipColor: null, final: false, underway: false };
         } else {
           const diff = o.homeWon - o.awayWon;
           const dormie = !o.decided && diff !== 0 && Math.abs(diff) === o.remaining;
@@ -263,10 +268,10 @@ export default async function MatchesPage({
             chip = `${abbrev(leader)} ${Math.abs(diff)} up thru ${o.holesPlayed}${dormie ? " · dormie" : ""}`;
             chipColor = diff > 0 ? homeTeam?.color ?? null : awayTeam?.color ?? null;
           }
-          state = { matchup: m, chip, chipColor, final: false, underway: o.holesPlayed > 0 };
+          state = { matchup: m, formatBadge, chip, chipColor, final: false, underway: o.holesPlayed > 0 };
         }
       } else {
-        state = { matchup: m, chip: fmtTeeTime(m.tee_time) ?? "Not started", chipColor: null, final: false, underway: false };
+        state = { matchup: m, formatBadge, chip: fmtTeeTime(m.tee_time) ?? "Not started", chipColor: null, final: false, underway: false };
       }
 
       stateById[m.id] = state;
@@ -446,7 +451,14 @@ export default async function MatchesPage({
                   return (
                     <div key={m.id} className="relative rounded-xl border border-hairline bg-white p-3 space-y-2 transition-colors hover:border-navy/30">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-navy shrink-0">Match {m.match_number}</p>
+                        <p className="flex items-center gap-2 text-sm font-bold text-navy shrink-0">
+                          Match {m.match_number}
+                          {st.formatBadge && (
+                            <span className="rounded-full border border-gold/60 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy/80" title="This match is played under a different format than the rest of the round">
+                              {st.formatBadge}
+                            </span>
+                          )}
+                        </p>
                         <div className="flex items-center gap-1 min-w-0">
                           <span
                             className={`truncate text-xs font-semibold px-2.5 py-1 rounded-full ${st.chipColor ? "" : "border border-hairline"}`}

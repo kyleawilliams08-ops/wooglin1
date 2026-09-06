@@ -3,7 +3,7 @@
 // so all public functions swallow errors.
 
 import type { createClient } from "@/lib/supabase/server";
-import { computePlayingHcps, computeHoleResults, isOneScoreFormat, strokesOnHole } from "./matchcalc";
+import { computePlayingHcps, computeHoleResults, isOneScoreFormat, strokesOnHole, effectiveFormat } from "./matchcalc";
 
 type Supa = ReturnType<typeof createClient>;
 type EPRef = { display_name: string; player_id: string | null } | null;
@@ -55,6 +55,7 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
     .from("matchups")
     .select(`
       id, round_id, match_number,
+      formats(name, hcp_allowance, hcp_allowance_secondary),
       home_p1:event_participants!matchups_home_p1_id_fkey(display_name, player_id),
       home_p2:event_participants!matchups_home_p2_id_fkey(display_name, player_id),
       away_p1:event_participants!matchups_away_p1_id_fkey(display_name, player_id),
@@ -64,6 +65,7 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
     .single();
   const matchup = matchupRaw as unknown as {
     id: string; round_id: string; match_number: number;
+    formats: MatchContext["fmt"] | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
   if (!matchup) return null;
@@ -77,7 +79,8 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
     event_id: string; side: string; course_tee_id: string;
     formats: MatchContext["fmt"] | null;
   } | null;
-  if (!round?.formats) return null;
+  const fmt = effectiveFormat(matchup.formats, round?.formats);
+  if (!round || !fmt) return null;
 
   const { data: teams } = await supabase
     .from("teams").select("id, name").eq("event_id", round.event_id).order("name");
@@ -106,7 +109,7 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
     return r?.override_hcp ?? r?.calculated_hcp ?? 0;
   };
 
-  const phcps = computePlayingHcps(round.formats, {
+  const phcps = computePlayingHcps(fmt, {
     homeP1: eff(matchup.home_p1?.player_id),
     homeP2: matchup.home_p2 ? eff(matchup.home_p2.player_id) : null,
     awayP1: eff(matchup.away_p1?.player_id),
@@ -126,7 +129,7 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
   return {
     eventId: round.event_id,
     matchNumber: matchup.match_number,
-    fmt: round.formats,
+    fmt,
     nineHole,
     homeTeam: teams?.[0]?.name ?? "Home",
     awayTeam: teams?.[1]?.name ?? "Away",

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computePlayingHcps,
   computeHoleResults,
+  effectiveFormat,
   type FormatInfo,
   type HoleInfo,
 } from "./matchcalc";
@@ -79,5 +80,31 @@ describe("computeHoleResults", () => {
     const phcps = computePlayingHcps(singles, { homeP1: 10, homeP2: null, awayP1: 12, awayP2: null }, false);
     const results = computeHoleResults(singles, phcps, {}, holes, false);
     expect(results).toEqual(Array(9).fill(null));
+  });
+});
+
+describe("effectiveFormat", () => {
+  const shamble: FormatInfo = { name: "Shamble", hcp_allowance: 70, hcp_allowance_secondary: null };
+
+  it("uses the round format when the match has no override", () => {
+    expect(effectiveFormat(null, shamble)).toBe(shamble);
+    expect(effectiveFormat(undefined, shamble)).toBe(shamble);
+  });
+
+  it("uses the match override when set", () => {
+    expect(effectiveFormat(bestBall, shamble)).toBe(bestBall);
+  });
+
+  it("is null when neither is set", () => {
+    expect(effectiveFormat(null, null)).toBeNull();
+  });
+
+  it("changes the strokes a 2v1 group gets — the 3-man Shamble case", () => {
+    // Round is Best Ball (100%); the short group agreed to Shamble (70%).
+    const ch = { homeP1: 10, homeP2: 20, awayP1: 30, awayP2: null };
+    const asRound = computePlayingHcps(effectiveFormat(null, bestBall)!, ch, false);
+    const asMatch = computePlayingHcps(effectiveFormat(shamble, bestBall)!, ch, false);
+    expect(asRound.awayP1).toBe(20);  // 30-10 at 100%
+    expect(asMatch.awayP1).toBe(14);  // (21-7) at 70%
   });
 });

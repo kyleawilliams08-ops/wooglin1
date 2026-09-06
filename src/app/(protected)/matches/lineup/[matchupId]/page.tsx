@@ -22,13 +22,14 @@ export default async function LineupPage({
 
   const { data: matchupRaw } = await supabase
     .from("matchups")
-    .select("id, round_id, match_number, status, home_p1_id, home_p2_id, away_p1_id, away_p2_id")
+    .select("id, round_id, match_number, status, home_p1_id, home_p2_id, away_p1_id, away_p2_id, formats(name)")
     .eq("id", params.matchupId)
     .single();
   const matchup = matchupRaw as unknown as {
     id: string; round_id: string; match_number: number; status: string;
     home_p1_id: string | null; home_p2_id: string | null;
     away_p1_id: string | null; away_p2_id: string | null;
+    formats: { name: string } | null; // per-match override
   } | null;
   if (!matchup) redirect("/matches");
 
@@ -166,7 +167,7 @@ export default async function LineupPage({
           {team.name} lineup
         </h1>
         <p className="text-sm text-navy/50 mt-0.5">
-          Match {matchup.match_number} · R{round.round_number}{round.name ? ` — ${round.name}` : ""} · {round.course_tees?.courses?.name} · {round.formats?.name}
+          Match {matchup.match_number} · R{round.round_number}{round.name ? ` — ${round.name}` : ""} · {round.course_tees?.courses?.name} · {matchup.formats?.name ?? round.formats?.name}
         </p>
         <p className="text-xs text-navy/40 mt-1">
           {isSingles ? "Pick 1 player." : "Pick 2 players (or 1 for a 2v1)."} Teammates already in another match this round aren&rsquo;t shown.

@@ -1,7 +1,7 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { computePlayingHcps, isOneScoreFormat } from "@/lib/matchcalc";
+import { computePlayingHcps, isOneScoreFormat, effectiveFormat } from "@/lib/matchcalc";
 import {
   LineupDraftRoom,
   type LineupDraftView,
@@ -136,8 +136,8 @@ export default async function LineupDraftPage({
     .select("player_id, course_tee_id, calculated_hcp, override_hcp")
     .eq("event_id", round.event_id);
   const teeId = round.course_tee_id as string;
-  const fmt = round.formats as unknown as
-    { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
+  type Fmt = { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null };
+  const roundFmt = round.formats as unknown as Fmt | null;
   const nineHole = round.side !== "full";
   const playerIdOf = (participantId: string | null) => (participantId ? byId.get(participantId)?.player_id ?? null : null);
   const courseHcp = (participantId: string | null): number => {
@@ -149,7 +149,7 @@ export default async function LineupDraftPage({
 
   const { data: matchupsRaw } = await supabase
     .from("matchups")
-    .select("id, match_number, home_p1_id, home_p2_id, away_p1_id, away_p2_id")
+    .select("id, match_number, home_p1_id, home_p2_id, away_p1_id, away_p2_id, formats(name, hcp_allowance, hcp_allowance_secondary)")
     .eq("round_id", params.roundId)
     .order("match_number");
 
@@ -169,7 +169,9 @@ export default async function LineupDraftPage({
   const strokesFor = (m: {
     home_p1_id: string | null; home_p2_id: string | null;
     away_p1_id: string | null; away_p2_id: string | null;
+    formats?: Fmt | null;
   }): StrokesInfo | null => {
+    const fmt = effectiveFormat(m.formats, roundFmt);   // per-match override
     if (!fmt || !m.home_p1_id || !m.away_p1_id) return null;
     const p = computePlayingHcps(fmt, {
       homeP1: courseHcp(m.home_p1_id),
@@ -185,7 +187,13 @@ export default async function LineupDraftPage({
       awayTeam: p.awayTeam,
     };
   };
-  const matchups: LineupMatchupView[] = (matchupsRaw ?? []).map((m) => ({
+  type MatchupRow = {
+    id: string; match_number: number;
+    home_p1_id: string | null; home_p2_id: string | null;
+    away_p1_id: string | null; away_p2_id: string | null;
+    formats: Fmt | null;
+  };
+  const matchups: LineupMatchupView[] = ((matchupsRaw ?? []) as unknown as MatchupRow[]).map((m) => ({
     id: m.id,
     matchNumber: m.match_number,
     home: { p1: side(m.home_p1_id), p2: side(m.home_p2_id) },

@@ -1508,3 +1508,16 @@ create policy "captains can update event matchups" on matchups
     select 1 from rounds r
     where r.id = matchups.round_id and public.is_event_captain(r.event_id)
   ));
+
+-- ============================================================================
+-- PER-MATCHUP FORMAT OVERRIDE
+-- ============================================================================
+-- The round's format is the default for every match in it. A single match can
+-- deviate (a 3-man group playing Shamble while the rest play Pinehurst, or one
+-- group agreeing to Best Ball). NULL = inherit the round's format. Captains of
+-- either side or admins set it from the matchup edit page until the match is
+-- underway. Overrides are restricted to formats with the same team_size as the
+-- round (2-man ↔ 2-man only) — a Singles ↔ 2-man switch changes the pairing
+-- shape and is not supported.
+alter table matchups
+  add column if not exists format_id uuid references formats(id) on delete set null;

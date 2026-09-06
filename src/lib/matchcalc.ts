@@ -18,6 +18,18 @@ export interface FormatInfo {
   hcp_allowance_secondary: number | null;
 }
 
+/**
+ * The format a match is actually played under: its own override if one is
+ * set (`matchups.format_id`), otherwise the round's default. Every consumer
+ * that computes strokes or names the format goes through this.
+ */
+export function effectiveFormat<F extends FormatInfo>(
+  matchupFormat: F | null | undefined,
+  roundFormat: F | null | undefined,
+): F | null {
+  return matchupFormat ?? roundFormat ?? null;
+}
+
 export interface CourseHcps {
   homeP1: number;
   homeP2: number | null; // null = no partner (Singles or 2v1 solo)

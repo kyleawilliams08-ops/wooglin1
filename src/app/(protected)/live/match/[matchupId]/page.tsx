@@ -7,7 +7,7 @@ import { LiveRefresher } from "@/components/LiveRefresher";
 import { HoleByHole, type HbhHole, type HbhSlot } from "@/components/HoleByHole";
 import { assertCanScore, upsertSingleScore, type SlotKey } from "@/lib/scoring";
 import { recordScoreFeed } from "@/lib/feed";
-import { computePlayingHcps, strokesOnHole, isOneScoreFormat } from "@/lib/matchcalc";
+import { computePlayingHcps, strokesOnHole, isOneScoreFormat, effectiveFormat } from "@/lib/matchcalc";
 
 type EPRef = { id: string; display_name: string; player_id: string | null } | null;
 
@@ -58,6 +58,7 @@ export default async function LiveMatchPage({
     .from("matchups")
     .select(`
       id, round_id, match_number,
+      formats(name, hcp_allowance, hcp_allowance_secondary),
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name, player_id),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name, player_id),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name, player_id),
@@ -67,6 +68,7 @@ export default async function LiveMatchPage({
     .single();
   const matchup = matchupRaw as unknown as {
     id: string; round_id: string; match_number: number;
+    formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
   if (!matchup) redirect("/matches");
@@ -82,7 +84,8 @@ export default async function LiveMatchPage({
   } | null;
   if (!round?.formats) redirect("/matches");
 
-  const fmt = round.formats!;
+  // The match may override the round format (3-man Shamble, etc.)
+  const fmt = effectiveFormat(matchup.formats, round.formats)!;
   const nineHole = round.side !== "full";
 
   const { data: teams } = await supabase

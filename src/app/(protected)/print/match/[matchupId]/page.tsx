@@ -9,6 +9,7 @@ import {
   computePlayingHcps,
   strokesOnHole,
   isOneScoreFormat,
+  effectiveFormat,
 } from "@/lib/matchcalc";
 
 type EPRef = { display_name: string; player_id: string | null } | null;
@@ -43,6 +44,7 @@ export default async function PrintScorecardPage({
     .from("matchups")
     .select(`
       id, round_id, match_number, tee_time,
+      formats(name, hcp_allowance, hcp_allowance_secondary),
       home_p1:event_participants!matchups_home_p1_id_fkey(display_name, player_id),
       home_p2:event_participants!matchups_home_p2_id_fkey(display_name, player_id),
       away_p1:event_participants!matchups_away_p1_id_fkey(display_name, player_id),
@@ -52,6 +54,7 @@ export default async function PrintScorecardPage({
     .single();
   const matchup = matchupRaw as unknown as {
     id: string; round_id: string; match_number: number; tee_time: string | null;
+    formats: { name: string; hcp_allowance: number; hcp_allowance_secondary: number | null } | null;
     home_p1: EPRef; home_p2: EPRef; away_p1: EPRef; away_p2: EPRef;
   } | null;
   if (!matchup) redirect("/matches");
@@ -69,7 +72,7 @@ export default async function PrintScorecardPage({
   } | null;
   if (!round?.formats) redirect("/matches");
 
-  const fmt = round.formats!;
+  const fmt = effectiveFormat(matchup.formats, round.formats)!;
   const nineHole = round.side !== "full";
 
   const { data: event } = await supabase

@@ -3,11 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { failTo } from "@/lib/actionError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default async function EditMatchupPage({
   params,
+  searchParams,
 }: {
   params: { id: string; roundId: string; matchupId: string };
+  searchParams: { error?: string };
 }) {
   const player = await requirePlayer();
   const supabase = createClient();
@@ -25,12 +29,12 @@ export default async function EditMatchupPage({
 
   const { data: roundRaw } = await supabase
     .from("rounds")
-    .select("id, round_number, name, formats(name)")
+    .select("id, round_number, name, formats(id, name, team_size)")
     .eq("id", params.roundId)
     .single();
   const round = roundRaw as unknown as {
     id: string; round_number: number; name: string | null;
-    formats: { name: string } | null;
+    formats: { id: string; name: string; team_size: number | null } | null;
   } | null;
   if (!round) redirect(`/admin/events/${params.id}`);
 
@@ -39,7 +43,7 @@ export default async function EditMatchupPage({
   const { data: matchupRaw } = await supabase
     .from("matchups")
     .select(`
-      id, match_number, status, result, tee_time, match_score,
+      id, match_number, status, result, tee_time, match_score, format_id,
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name),
@@ -49,7 +53,7 @@ export default async function EditMatchupPage({
     .single();
   const matchup = matchupRaw as unknown as {
     id: string; match_number: number; status: string; result: string | null;
-    tee_time: string | null; match_score: string | null;
+    tee_time: string | null; match_score: string | null; format_id: string | null;
     home_p1: { id: string; display_name: string } | null;
     home_p2: { id: string; display_name: string } | null;
     away_p1: { id: string; display_name: string } | null;
@@ -80,6 +84,19 @@ export default async function EditMatchupPage({
   const canHome = admin || (captainMay && captainEp!.team_id === homeTeam?.id);
   const canAway = admin || (captainMay && captainEp!.team_id === awayTeam?.id);
   const canMeta = admin; // tee time, status, result, match score
+  // Format override: admin, or either captain until the match is underway.
+  const canFormat = admin || captainMay;
+
+  // A match may deviate from the round format, but only to one with the same
+  // team size — Singles ↔ 2-man changes the pairing shape and is not offered.
+  const { data: formatRows } = await supabase
+    .from("formats")
+    .select("id, name, team_size")
+    .order("sort_order");
+  const roundTeamSize = round.formats?.team_size ?? null;
+  const formatOptions = (formatRows ?? []).filter(
+    (f) => (f.team_size ?? null) === roundTeamSize && f.id !== round.formats?.id,
+  );
 
   const { data: participantsRaw } = await supabase
     .from("event_participants")
@@ -108,6 +125,7 @@ export default async function EditMatchupPage({
   );
 
   const matchupsPath = `/admin/events/${params.id}/rounds/${params.roundId}/matchups`;
+  const editPath = `${matchupsPath}/${params.matchupId}`;
 
   async function saveMatchup(formData: FormData) {
     "use server";
@@ -125,6 +143,13 @@ export default async function EditMatchupPage({
       update.away_p2_id = isSingles ? null : ((formData.get("away_p2") as string) || null);
       if (update.away_p2_id && update.away_p2_id === update.away_p1_id) update.away_p2_id = null;
     }
+    if (canFormat) {
+      const wanted = (formData.get("format_id") as string) || null;
+      if (wanted && !formatOptions.some((f) => f.id === wanted)) {
+        failTo(editPath, { message: "That format isn't available for this round (team size differs)." });
+      }
+      update.format_id = wanted;
+    }
     if (canMeta) {
       update.tee_time    = (formData.get("tee_time") as string) || null;
       update.status      = formData.get("status") as string;
@@ -132,7 +157,7 @@ export default async function EditMatchupPage({
       update.match_score = (formData.get("match_score") as string) || null;
     }
     const { error } = await supabase.from("matchups").update(update).eq("id", params.matchupId);
-    if (error) throw new Error(`Couldn't save matchup: ${error.message}`);
+    failTo(editPath, error);
     revalidatePath(matchupsPath);
     revalidatePath("/matches");
     redirect(admin ? matchupsPath : "/matches");
@@ -156,6 +181,8 @@ export default async function EditMatchupPage({
         Edit Match {matchup.match_number}
       </h1>
 
+      <ErrorBanner message={searchParams.error} />
+
       <form action={saveMatchup} className="space-y-5">
 
         {/* Tee time */}
@@ -168,6 +195,23 @@ export default async function EditMatchupPage({
             defaultValue={matchup.tee_time ?? ""}
             className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy disabled:bg-parchment disabled:text-navy/50"
           />
+        </div>
+
+        {/* Format — round default, or a per-match override */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-navy">Format</label>
+          <select name="format_id" disabled={!canFormat} defaultValue={matchup.format_id ?? ""}
+            className="w-full rounded-lg border border-hairline px-3 py-2 text-sm text-navy bg-white disabled:bg-parchment disabled:text-navy/50">
+            <option value="">Round default{round.formats ? ` — ` : ""}</option>
+            {formatOptions.map((f) => (
+              <option key={f.id} value={f.id}>{f.name} (this match only)</option>
+            ))}
+          </select>
+          <p className="text-xs text-navy/50">
+            {formatOptions.length > 0
+              ? "Change only if this group is playing something different — e.g. a 3-man group doing a Shamble. Locks once the match is underway."
+              : "No alternate formats share this round's team size."}
+          </p>
         </div>
 
         {/* Home team */}

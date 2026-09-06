@@ -59,6 +59,7 @@ export default async function MatchupsPage({
     .from("matchups")
     .select(`
       id, match_number, status, result, tee_time, match_score,
+      formats(name),
       home_p1:event_participants!matchups_home_p1_id_fkey(id, display_name),
       home_p2:event_participants!matchups_home_p2_id_fkey(id, display_name),
       away_p1:event_participants!matchups_away_p1_id_fkey(id, display_name),
@@ -70,6 +71,7 @@ export default async function MatchupsPage({
   const matchups = (matchupsRaw ?? []) as unknown as {
     id: string; match_number: number; status: string; result: string | null;
     tee_time: string | null; match_score: string | null;
+    formats: { name: string } | null; // per-match override (null = round default)
     home_p1: { id: string; display_name: string } | null;
     home_p2: { id: string; display_name: string } | null;
     away_p1: { id: string; display_name: string } | null;
@@ -456,6 +458,11 @@ export default async function MatchupsPage({
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-navy/40 font-semibold uppercase tracking-wide mb-1">
                     Match {m.match_number}
+                    {m.formats && m.formats.name !== round.formats?.name && (
+                      <span className="ml-2 rounded-full border border-gold/60 bg-gold/10 px-2 py-0.5 font-semibold normal-case text-navy/80">
+                        {m.formats.name}
+                      </span>
+                    )}
                     {m.tee_time && (
                       <span className="ml-2 font-normal normal-case text-navy/50">
                         · {fmt12(m.tee_time)}
