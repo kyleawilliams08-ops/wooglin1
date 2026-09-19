@@ -588,6 +588,10 @@ export default async function EventDetailPage({
                 className="text-sm text-navy/60 hover:text-navy">
                 Matchups ›
               </Link>
+              <Link href={`/print/round/${r.id}`} target="_blank"
+                className="text-sm text-navy/60 hover:text-navy">
+                Print ›
+              </Link>
               <Link href={`/admin/events/${params.id}/rounds/${r.id}`}
                 className="text-sm text-navy/60 hover:text-navy">
                 Edit ›

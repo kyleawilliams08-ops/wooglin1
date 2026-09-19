@@ -312,15 +312,23 @@ export default async function MatchupsPage({
         </p>
       )}
 
-      <div>
-        <h1 className="text-2xl font-display font-bold text-navy">
-          Tee Times — Round {round.round_number}
-          {round.name ? ` · ${round.name}` : ""}
-        </h1>
-        <p className="text-sm text-navy/50 mt-0.5">
-          {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
-          {sideLabel[round.side]} · {round.formats?.name}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-navy">
+            Tee Times — Round {round.round_number}
+            {round.name ? ` · ${round.name}` : ""}
+          </h1>
+          <p className="text-sm text-navy/50 mt-0.5">
+            {round.course_tees?.courses?.name} · {round.course_tees?.tee_name} Tees ·{" "}
+            {sideLabel[round.side]} · {round.formats?.name}
+          </p>
+        </div>
+        {/* Whole-round print job — works before pairings are drafted: unset
+            lineups print as write-in cards (format, tee time, CTP holes). */}
+        <Link href={`/print/round/${params.roundId}`} target="_blank"
+          className="shrink-0 rounded-lg border border-hairline bg-white px-3 py-2 text-sm font-semibold text-navy hover:border-navy/40">
+          🖨 Print scorecards
+        </Link>
       </div>
 
       {/* Copy pairings to another round (same side-size, not underway) */}
