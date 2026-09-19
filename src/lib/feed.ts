@@ -132,8 +132,9 @@ async function loadContext(supabase: Supa, matchupId: string): Promise<MatchCont
     matchNumber: matchup.match_number,
     fmt,
     nineHole,
-    homeTeam: teams?.[0]?.name ?? "Home",
-    awayTeam: teams?.[1]?.name ?? "Away",
+    // trim: a stray space in a team name printed as "(Europe )" in every line
+    homeTeam: teams?.[0]?.name?.trim() || "Home",
+    awayTeam: teams?.[1]?.name?.trim() || "Away",
     homeNames: names(matchup.home_p1, matchup.home_p2),
     awayNames: names(matchup.away_p1, matchup.away_p2),
     matchup,
@@ -165,6 +166,23 @@ export async function recordScoreFeed(supabase: Supa, matchupId: string): Promis
     const oneScore = isOneScoreFormat(ctx.fmt.name);
     const inserts: { event_id: string; matchup_id: string; kind: string; hole_number: number; message: string }[] = [];
 
+    // Hole lines are write-once, so only post a hole once it's SETTLED. In
+    // Best Ball / Shamble a hole has a provisional result as soon as one ball
+    // per side is in — posting then got it wrong whenever the partner's
+    // better score arrived a few seconds later from another phone ("Brendan
+    // parred #1 to go 1 up" on a hole his side lost). Settled = every ball in
+    // the lineup has a score, or the group has moved on (a later hole has a
+    // result — covers a picked-up ball that never gets a number).
+    const lastScored = results.reduce((last, r, i) => (r !== null ? i : last), -1);
+    const holeSettled = (i: number): boolean => {
+      if (i < lastScored) return true;
+      if (oneScore || ctx.fmt.name === "Singles") return true; // one ball a side — result needs both already
+      const s = ctx.scoreMap[ctx.holes[i].hole_number];
+      const m = ctx.matchup;
+      return (!m.home_p1 || s?.home_p1_gross != null) && (!m.home_p2 || s?.home_p2_gross != null)
+          && (!m.away_p1 || s?.away_p1_gross != null) && (!m.away_p2 || s?.away_p2_gross != null);
+    };
+
     let diff = 0; // + = home ahead
     for (let i = 0; i < ctx.holes.length; i++) {
       const r = results[i];
@@ -175,6 +193,7 @@ export async function recordScoreFeed(supabase: Supa, matchupId: string): Promis
       const hole = ctx.holes[i];
       const n = hole.hole_number;
       if (existing.has(n)) continue;
+      if (!holeSettled(i)) continue; // posts on a later save, once it's final
 
       const leader = diff > 0 ? ctx.homeTeam : ctx.awayTeam;
       let message: string;
