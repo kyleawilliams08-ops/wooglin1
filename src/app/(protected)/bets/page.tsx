@@ -102,7 +102,11 @@ export default async function BetsPage({
   );
   const tab = searchParams.tab === "activity" ? "activity" : "ledger";
 
-  const totals = ledgerNets(bets.map((b) => ({ ...b, amount: Number(b.amount) })));
+  // Void bets never happened — without this filter their participants would
+  // still show on the ledger as $0 rows.
+  const totals = ledgerNets(
+    bets.filter((b) => b.status !== "void").map((b) => ({ ...b, amount: Number(b.amount) })),
+  );
   const myNet = totals.get(player.id) ?? 0;
   const ledger = Array.from(totals.entries())
     .filter(([pid]) => labelOf.has(pid))
