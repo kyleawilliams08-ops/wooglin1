@@ -1,5 +1,6 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEvent } from "@/lib/currentEvent";
 import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { CardMenu } from "@/components/CardMenu";
@@ -41,13 +42,7 @@ export default async function MatchesPage({
   const admin = isAdmin(player);
   const supabase = createClient();
 
-  const { data: events } = await supabase
-    .from("events")
-    .select("id, name, year")
-    .eq("status", "active")
-    .order("year", { ascending: false })
-    .limit(1);
-  const event = events?.[0];
+  const event = await getCurrentEvent(supabase); // honors Test Lab test mode
 
   if (!event) {
     return (

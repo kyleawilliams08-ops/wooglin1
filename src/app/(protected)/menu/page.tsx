@@ -19,6 +19,7 @@ export default async function MenuPage() {
     { href: "/admin/courses", label: "Manage Courses", desc: "Course, tee & hole setup" },
     { href: "/admin/formats", label: "Formats",        desc: "Handicap allowances per format" },
     { href: "/admin/history", label: "Edit History",   desc: "Backfill past cup results" },
+    { href: "/admin/test-lab", label: "Test Lab",      desc: "Test copy of an event & view the app as any player" },
   ];
 
   const card = "flex items-center justify-between rounded-xl border border-hairline px-4 py-4 transition-colors";

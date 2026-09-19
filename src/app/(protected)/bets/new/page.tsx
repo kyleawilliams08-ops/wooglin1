@@ -1,5 +1,6 @@
 import { requirePlayer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEvent } from "@/lib/currentEvent";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { BetWizard, type WizardPlayer } from "@/components/BetWizard";
@@ -7,13 +8,10 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { failTo } from "@/lib/actionError";
 import { recordBetProposed } from "@/lib/feed";
 
-async function getActor(supabase: ReturnType<typeof createClient>) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("players").select("id, role").eq("auth_user_id", user.id).single();
-  if (!me) redirect("/login");
-  return { id: me.id as string };
+// requirePlayer (not a raw auth lookup) so a Test Lab masquerade is honored.
+async function getActor() {
+  const me = await requirePlayer();
+  return { id: me.id };
 }
 
 // One-tap-per-page bet proposal wizard.
@@ -29,15 +27,13 @@ export default async function NewBetPage({
     .from("players").select("id, name, nickname, avatar_url").order("name");
 
   // Limit to the active cup's roster; fall back to everyone off-season.
-  const { data: activeEvents } = await supabase
-    .from("events").select("id").eq("status", "active")
-    .order("year", { ascending: false }).limit(1);
+  const currentEvent = await getCurrentEvent(supabase);
   let rosterIds: Set<string> | null = null;
-  if (activeEvents?.[0]) {
+  if (currentEvent) {
     const { data: eps } = await supabase
       .from("event_participants")
       .select("player_id")
-      .eq("event_id", activeEvents[0].id)
+      .eq("event_id", currentEvent.id)
       .not("player_id", "is", null);
     const ids = (eps ?? []).map((e) => e.player_id as string);
     if (ids.length > 0) rosterIds = new Set(ids);
@@ -55,7 +51,7 @@ export default async function NewBetPage({
   async function createBet(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const type = formData.get("bet_type") as string;
     const amount = parseFloat(formData.get("amount") as string);
     const description = (formData.get("description") as string)?.trim() || null;

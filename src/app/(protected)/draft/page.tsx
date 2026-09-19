@@ -1,5 +1,6 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getTestModeEvent } from "@/lib/currentEvent";
 import Link from "next/link";
 import { DraftRoom, type DraftView, type DraftTeam } from "@/components/DraftRoom";
 import { youTubeId } from "@/lib/chime";
@@ -23,12 +24,18 @@ export default async function DraftPage({
   const player = await requirePlayer();
   const supabase = createClient();
 
+  // Most recent REAL draft. In Test Lab test mode, the test event's draft
+  // instead — and a test copy's draft never shows to anyone outside test mode.
+  const testEvent = await getTestModeEvent(supabase);
   const { data: drafts } = await supabase
     .from("drafts")
-    .select("*, events(id, name, year)")
+    .select("*, events(*)")
     .order("created_at", { ascending: false })
-    .limit(1);
-  const draft = drafts?.[0] ?? null;
+    .limit(10);
+  const draft = (drafts ?? []).find((d) => {
+    const ev = d.events as unknown as { id: string; is_test?: boolean } | null;
+    return testEvent ? ev?.id === testEvent.id : !ev?.is_test;
+  }) ?? null;
 
   if (!draft) {
     return (

@@ -54,7 +54,7 @@ npx tsc --noEmit     # typecheck
 
 ```
 players(id, auth_user_id, name, nickname, email UNIQUE, avatar_url, current_index, role)
-events(id, year, name, location, start/end_date, status[draft/active/complete])  -- year NOT unique
+events(id, year, name, location, start/end_date, status[draft/active/complete], is_test)  -- year NOT unique; is_test = Test Lab copy (always 'draft', hidden from everyone outside test mode)
 teams(id, event_id, name, color)
 event_participants(id, event_id, player_id?, team_id, display_name, is_captain)
 courses / course_tees(rating, slope, par) / holes(hole_number, par, stroke_index)
@@ -86,7 +86,11 @@ ctp_claims(id, ctp_id, participant_id, claimed_by, created_at)  -- claim-chain h
 - `src/components/HoleByHole.tsx` — default mobile scorer on `/live/match/[id]`: tap-to-score (instant save), auto-advance (2s), swipe between holes.
 - `src/components/PlayerCard.tsx` — trading-card profile (photo/monogram, stats, career timeline chips, most-recent-cup team color via event_results linkage).
 - `src/components/LiveRefresher.tsx` — Realtime → router.refresh (needs `hole_scores`/`matchups` in the realtime publication).
-- `/print/match/[id]` — admin-only landscape paper-backup scorecard (browser print → PDF).
+- `/print/match/[id]` + **`/print/round/[roundId]`** — admin-only landscape paper-backup scorecards (browser print → PDF). The round page prints every tee time in one job (one page each) and works BEFORE pairings are drafted: unset lineups print as write-in cards that still carry format + allowance, tee time, par/SI and CTP holes; `?blank=N` prints generic blanks. Shared `<PrintScorecard>` + `lib/printData.ts`. Strokes only print once both sides are set (they're normalized across the match). Buttons: Tee Times page header + "Print ›" on each Schedule row.
+- **Test Lab** (`/admin/test-lab`, Menu → Commissioner Tools; `lib/testLabActions.ts`) — dress-rehearsal tooling, all cookie-based, per-admin, 12h expiry, with an always-on gold `<TestLabBanner>` (one-tap exits):
+  - **Test copy**: deep-copies an event's setup (teams, field, courses, handicaps, rounds, tee times + lineups, CTP holes; NO scores/drafts/feed) into an event flagged `events.is_test`, status forced to 'draft'. "Trash it" deletes with `is_test = true` in the WHERE clause.
+  - **Test mode** (`wc_test_event` cookie): **`getCurrentEvent()` in `lib/currentEvent.ts` is the ONLY way to resolve "the event the app is showing"** — test event for that admin, else the active event. Never query `events … status = 'active'` directly again (Home, Matches, feed page, bets roster and the feed writers all go through it). Test events are filtered out of Home's draft card, `/draft`, `/draft/prep` and player profiles unless you're in test mode on them.
+  - **View as** (`wc_masq` cookie): `requirePlayer()` returns the masqueraded player (with `masqueradedBy`) — only after confirming the REAL user is admin. `requireRealPlayer()` ignores it (Test Lab + exits use this). The Supabase session never changes, so RLS still runs as the admin; masquerade changes what the app shows and how its own checks answer. **Always resolve the acting player via `requirePlayer()`**, never a raw `auth.getUser()` → players lookup, or masquerade silently won't apply. Writes are recorded as the masqueraded player; bets are year-wide (not event-scoped), so test bets hit the real ledger.
 - `src/lib/feed.ts` — clubhouse-feed writers (ALL best-effort: feed failure must never break scoring/bets). Hole events idempotent per (matchup, hole).
 - `src/lib/bets.ts` — betting money math + tests. Per-person stakes: every loser pays the stake, pot splits among winners (covers 1v1/2v2/group). Only status 'closed' moves money.
 - `src/components/LineupPicker.tsx` + `/matches/lineup/[id]?side=&day=` — full-page tappable avatar-grid lineup setting (captains own side; locked once underway; Singles max 1; threads ?day= back).

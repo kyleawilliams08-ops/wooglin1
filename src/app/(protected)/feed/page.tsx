@@ -1,5 +1,6 @@
 import { requirePlayer } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEvent } from "@/lib/currentEvent";
 import Link from "next/link";
 import { LiveRefresher } from "@/components/LiveRefresher";
 import { FeedList, type FeedItem } from "@/components/FeedList";
@@ -17,13 +18,7 @@ export default async function FeedPage({
   const supabase = createClient();
   const kinds = (searchParams.kinds ?? "").split(",").filter((k) => VALID_KINDS.includes(k));
 
-  const { data: events } = await supabase
-    .from("events")
-    .select("id, name, year")
-    .eq("status", "active")
-    .order("year", { ascending: false })
-    .limit(1);
-  const event = events?.[0];
+  const event = await getCurrentEvent(supabase); // honors Test Lab test mode
 
   let feedQuery = event
     ? supabase

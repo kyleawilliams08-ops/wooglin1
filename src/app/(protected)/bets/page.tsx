@@ -1,6 +1,5 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -38,17 +37,10 @@ const pname = (p: BetPart) => p.players?.nickname ?? p.players?.name ?? "?";
 const isOpen = (b: Bet) => b.status === "active" || b.status === "pending";
 
 /** Server-side actor lookup for actions (id + admin flag + label). */
-async function getActor(supabase: ReturnType<typeof createClient>) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: me } = await supabase
-    .from("players").select("id, role, name, nickname").eq("auth_user_id", user.id).single();
-  if (!me) redirect("/login");
-  return {
-    id: me.id as string,
-    admin: me.role === "admin" || me.role === "assistant",
-    label: (me.nickname ?? me.name) as string,
-  };
+async function getActor() {
+  // requirePlayer (not a raw auth lookup) so a Test Lab masquerade is honored.
+  const me = await requirePlayer();
+  return { id: me.id, admin: isAdmin(me), label: me.nickname ?? me.name };
 }
 
 /** Fetch one bet with participants, for action guards. */
@@ -122,7 +114,7 @@ export default async function BetsPage({
   async function closeBet(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const betId = formData.get("bet_id") as string;
     const winner = formData.get("winner") as string; // side1 | side2 | push | <player_id>
 
@@ -175,7 +167,7 @@ export default async function BetsPage({
   async function cancelBet(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
     if (!bet || !(bet.status === "active" || bet.status === "pending")) {
@@ -193,7 +185,7 @@ export default async function BetsPage({
   async function protestBet(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
     if (!bet || !(bet.status === "closed" || bet.status === "push")) {
@@ -219,7 +211,7 @@ export default async function BetsPage({
   async function withdrawProtest(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
     if (!bet || bet.status !== "protested") failTo("/bets", { message: "No protest to withdraw" });
@@ -236,7 +228,7 @@ export default async function BetsPage({
   async function concedeBet(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
     if (!bet || bet.status !== "protested") failTo("/bets", { message: "Bet isn't protested" });
@@ -253,7 +245,7 @@ export default async function BetsPage({
   async function dismissProtest(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     if (!me.admin) failTo("/bets", { message: "Admins only" });
     const betId = formData.get("bet_id") as string;
     const bet = await getBet(supabase, betId);
@@ -271,7 +263,7 @@ export default async function BetsPage({
   async function adminReopen(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const me = await getActor(supabase);
+    const me = await getActor();
     if (!me.admin) failTo("/bets", { message: "Admins only" });
     const { error } = await supabase
       .from("bets")

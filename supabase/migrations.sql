@@ -1521,3 +1521,14 @@ create policy "captains can update event matchups" on matchups
 -- shape and is not supported.
 alter table matchups
   add column if not exists format_id uuid references formats(id) on delete set null;
+
+-- ============================================================================
+-- TEST LAB — test copies of an event
+-- ============================================================================
+-- Menu → Test Lab can deep-copy an event's setup into a throwaway event for a
+-- dress rehearsal. is_test marks those copies: they stay status 'draft' (never
+-- anyone's active event), only an admin's own test-mode cookie points the app
+-- at one, and the Test Lab delete is scoped to is_test = true so it can never
+-- remove a real event.
+alter table events
+  add column if not exists is_test boolean not null default false;

@@ -1,5 +1,6 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEvent } from "@/lib/currentEvent";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -33,13 +34,8 @@ export default async function Home({
   const kinds = (searchParams.kinds ?? "").split(",").filter((k) => VALID_KINDS.includes(k));
   const supabase = createClient();
 
-  const { data: activeEvents } = await supabase
-    .from("events")
-    .select("*")
-    .eq("status", "active")
-    .order("year", { ascending: false })
-    .limit(1);
-  const activeEvent = activeEvents?.[0] ?? null;
+  // Active event — or the admin's test event while in Test Lab test mode
+  const activeEvent = await getCurrentEvent(supabase);
 
   // Clubhouse feed for the active event (written by scoring/lineup actions)
   let feedQuery = activeEvent
@@ -75,13 +71,16 @@ export default async function Home({
   // don't keep promoting a draft that's merely stuck on 'live'.
   const { data: upcomingDrafts } = await supabase
     .from("drafts")
-    .select("id, status, scheduled_at, events(year, status)")
+    .select("id, status, scheduled_at, event_id, events(*)")
     .in("status", ["scheduled", "live"])
     .order("created_at", { ascending: false })
     .limit(5);
   const draft = (upcomingDrafts ?? []).find((d) => {
-    const ev = d.events as unknown as { year: number; status: string } | null;
-    return ev && ev.status !== "active" && ev.status !== "complete";
+    const ev = d.events as unknown as { year: number; status: string; is_test?: boolean } | null;
+    if (!ev) return false;
+    // Test copies are invisible unless this admin is in test mode on that event
+    if (ev.is_test) return activeEvent?.is_test === true && activeEvent.id === d.event_id;
+    return ev.status !== "active" && ev.status !== "complete";
   }) ?? null;
   const draftYear = (draft?.events as unknown as { year: number } | null)?.year;
 

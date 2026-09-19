@@ -1,5 +1,6 @@
 import { requirePlayer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEvent, getTestModeEvent } from "@/lib/currentEvent";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
@@ -26,15 +27,17 @@ export default async function DraftPrepPage({
 
   // Same event the draft room uses: the most recent draft's event, else the
   // active event.
-  const { data: drafts } = await supabase
-    .from("drafts").select("event_id").order("created_at", { ascending: false }).limit(1);
-  let eventId = drafts?.[0]?.event_id as string | undefined;
+  // (In Test Lab test mode: the test event. Test copies never show otherwise.)
+  const testEvent = await getTestModeEvent(supabase);
+  let eventId: string | undefined = testEvent?.id;
   if (!eventId) {
-    const { data: actives } = await supabase
-      .from("events").select("id").eq("status", "active")
-      .order("year", { ascending: false }).limit(1);
-    eventId = actives?.[0]?.id;
+    const { data: drafts } = await supabase
+      .from("drafts").select("event_id, events(*)").order("created_at", { ascending: false }).limit(10);
+    eventId = (drafts ?? []).find(
+      (d) => !(d.events as unknown as { is_test?: boolean } | null)?.is_test,
+    )?.event_id as string | undefined;
   }
+  if (!eventId) eventId = (await getCurrentEvent(supabase))?.id;
 
   if (!eventId) {
     return (

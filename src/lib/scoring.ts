@@ -2,7 +2,7 @@
 // hole-by-hole scorer. Authorization mirrors the RLS policies.
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requirePlayer, isAdmin } from "@/lib/auth";
 
 export type SlotKey = "hp1" | "hp2" | "ap1" | "ap2";
 
@@ -20,13 +20,8 @@ const SLOT_COLUMNS: Record<SlotKey, string> = {
  */
 export async function assertCanScore(matchupId: string) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: player } = await supabase
-    .from("players").select("id, role").eq("auth_user_id", user.id).single();
-  if (!player) redirect("/login");
-  if (player.role === "admin" || player.role === "assistant") return;
+  const player = await requirePlayer(); // masquerade-aware
+  if (isAdmin(player)) return;
 
   const { data: m } = await supabase
     .from("matchups")

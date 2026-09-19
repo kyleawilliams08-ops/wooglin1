@@ -41,13 +41,14 @@ export default async function PlayerProfilePage({
   // Every event this player has been part of (team history)
   const { data: epsRaw } = await supabase
     .from("event_participants")
-    .select("id, is_captain, event_id, teams(name, color), events(name, year)")
+    .select("id, is_captain, event_id, teams(name, color), events(*)")
     .eq("player_id", params.id);
-  const eps = (epsRaw ?? []) as unknown as {
+  // Test Lab copies never count toward anyone's record or match history.
+  const eps = ((epsRaw ?? []) as unknown as {
     id: string; is_captain: boolean; event_id: string;
     teams: { name: string; color: string } | null;
-    events: { name: string; year: number } | null;
-  }[];
+    events: { name: string; year: number; is_test?: boolean } | null;
+  }[]).filter((e) => !e.events?.is_test);
   const epIds = eps.map((e) => e.id);
   const epIdSet = new Set(epIds);
   const eventById = new Map(eps.map((e) => [e.event_id, e]));

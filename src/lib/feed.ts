@@ -4,6 +4,7 @@
 
 import type { createClient } from "@/lib/supabase/server";
 import { computePlayingHcps, computeHoleResults, isOneScoreFormat, strokesOnHole, effectiveFormat } from "./matchcalc";
+import { getCurrentEvent } from "./currentEvent";
 
 type Supa = ReturnType<typeof createClient>;
 type EPRef = { display_name: string; player_id: string | null } | null;
@@ -353,10 +354,7 @@ export async function recordLineup(
  */
 export async function recordBetClosed(supabase: Supa, betId: string): Promise<void> {
   try {
-    const { data: events } = await supabase
-      .from("events").select("id").eq("status", "active")
-      .order("year", { ascending: false }).limit(1);
-    const eventId = events?.[0]?.id;
+    const eventId = (await getCurrentEvent(supabase))?.id; // test mode → test feed
     if (!eventId) return;
 
     const { data: betRaw } = await supabase
@@ -410,10 +408,7 @@ export async function recordBetClosed(supabase: Supa, betId: string): Promise<vo
  */
 export async function recordBetProtest(supabase: Supa, betId: string, protesterLabel: string): Promise<void> {
   try {
-    const { data: events } = await supabase
-      .from("events").select("id").eq("status", "active")
-      .order("year", { ascending: false }).limit(1);
-    const eventId = events?.[0]?.id;
+    const eventId = (await getCurrentEvent(supabase))?.id; // test mode → test feed
     if (!eventId) return;
 
     const { data: bet } = await supabase
@@ -440,10 +435,7 @@ export async function recordBetProtest(supabase: Supa, betId: string, protesterL
  */
 export async function recordBetProposed(supabase: Supa, betId: string): Promise<void> {
   try {
-    const { data: events } = await supabase
-      .from("events").select("id").eq("status", "active")
-      .order("year", { ascending: false }).limit(1);
-    const eventId = events?.[0]?.id;
+    const eventId = (await getCurrentEvent(supabase))?.id; // test mode → test feed
     if (!eventId) return;
 
     const { data: betRaw } = await supabase

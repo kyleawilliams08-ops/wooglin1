@@ -112,12 +112,8 @@ export default async function LineupPage({
   async function saveLineup(formData: FormData) {
     "use server";
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) redirect("/login");
-    const { data: me } = await supabase
-      .from("players").select("id, role").eq("auth_user_id", user.id).single();
-    if (!me) redirect("/login");
-    const meAdmin = me.role === "admin" || me.role === "assistant";
+    const me = await requirePlayer(); // masquerade-aware
+    const meAdmin = isAdmin(me);
 
     if (!meAdmin) {
       const { data: cap } = await supabase
