@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { courseHandicap, playingHandicap } from "@/lib/handicap";
 import { CopyButton } from "@/components/CopyButton";
+import { DownloadTextButton } from "@/components/DownloadTextButton";
 
 export const dynamic = "force-dynamic";
 
@@ -85,9 +86,23 @@ export default async function PacketDataPage() {
     return idx == null ? null : courseHandicap(idx, tee);
   };
 
+  // Points come from the matchups that actually exist: 1 per match, and the
+  // Cup is won at half the total plus a half.
+  const matchCount = (roundId: string) => (matchups ?? []).filter((m) => m.round_id === roundId).length;
+  const totalPoints = rounds.reduce((n, r) => n + matchCount(r.id), 0);
+  const emptyRounds = rounds.filter((r) => matchCount(r.id) === 0)
+    .map((r) => `R${r.round_number}${r.name ? ` ${r.name}` : ""}`);
+
   const data = {
     generated_at: new Date().toISOString(),
     event: eventRow,
+    points: {
+      total_available: totalPoints,
+      needed_to_win: totalPoints / 2 + 0.5,
+      matches_per_round: rounds.map((r) => ({ round: r.round_number, name: r.name, matches: matchCount(r.id) })),
+      // A round with no tee times adds no points yet — add them before printing
+      rounds_with_no_matches: emptyRounds,
+    },
     teams: (teams ?? []).map((t) => ({
       name: t.name.trim(), color: t.color,
       players: parts.filter((p) => p.team_id === t.id)
@@ -156,7 +171,20 @@ export default async function PacketDataPage() {
             printed trip packet. Handicaps come from the same engine as the scorecards.
           </p>
         </div>
-        <CopyButton text={json} label="Copy all" />
+        <div className="flex shrink-0 flex-col gap-2">
+          <DownloadTextButton text={json} filename={`wooglin-packet-data-${eventRow?.year ?? "event"}.txt`} label="Download .txt" />
+          <CopyButton text={json} label="Copy all" />
+        </div>
+      </div>
+
+      <div className={`rounded-xl border px-4 py-3 text-sm ${emptyRounds.length ? "border-usa-red bg-usa-red/10 text-usa-red" : "border-hairline bg-white text-navy"}`}>
+        <p className="font-semibold">
+          {totalPoints} points available · {totalPoints / 2 + 0.5} wins the Cup
+        </p>
+        <p className="text-xs opacity-80">
+          Counted from the tee times in the app ({rounds.map((r) => `R${r.round_number}: ${matchCount(r.id)}`).join(" · ")}).
+          {emptyRounds.length > 0 && ` ${emptyRounds.join(", ")} ${emptyRounds.length === 1 ? "has" : "have"} no tee times yet — add them so the points are right.`}
+        </p>
       </div>
       <pre className="max-h-[70vh] overflow-auto rounded-xl border border-hairline bg-white p-3 text-[11px] leading-snug text-navy">
         {json}
