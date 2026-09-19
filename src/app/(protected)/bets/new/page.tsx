@@ -91,6 +91,8 @@ export default async function NewBetPage({
     const { error: pErr } = await supabase
       .from("bet_participants")
       .insert(parts.map((p) => ({ ...p, bet_id: betRow!.id })));
+    // Don't leave a live bet with nobody in it
+    if (pErr) await supabase.from("bets").delete().eq("id", betRow!.id);
     failTo("/bets/new", pErr);
     await recordBetProposed(supabase, betRow!.id); // best-effort feed post
     revalidatePath("/bets");

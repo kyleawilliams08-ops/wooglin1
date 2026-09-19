@@ -14,6 +14,7 @@ import {
 } from "@/lib/matchcalc";
 import { matchOutcome, outcomeBadge } from "@/lib/matchplay";
 import { ScoreInput } from "@/components/ScoreInput";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { assertCanScore, upsertHoleScores } from "@/lib/scoring";
 import { recordScoreFeed, recordMatchFinal } from "@/lib/feed";
 
@@ -33,6 +34,22 @@ function holeNums(side: string): number[] {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+// Module-level on purpose: inline server actions can only capture
+// serializable values, so these can't be closures inside the component.
+/** A save that didn't land must never look like it did → back to the card with ?error=. */
+function errorPath(cardPath: string, msg: string): string {
+  return `${cardPath}${cardPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(msg)}`;
+}
+/** Returns the failure message, or null on success. (redirect() throws, so callers redirect outside this try.) */
+async function writeCard(sb: ReturnType<typeof createClient>, matchupId: string, formData: FormData) {
+  try {
+    await upsertHoleScores(sb, matchupId, formData);
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : "Scores not saved";
+  }
+}
+
 export async function MatchScorecard({
   matchupId,
   currentPath,
@@ -44,6 +61,7 @@ export async function MatchScorecard({
   reviewHref,
   cardHref,
   hbhHref,
+  errorMessage,
 }: {
   matchupId: string;
   currentPath: string;   // clean path (no query) — used for revalidation
@@ -55,6 +73,7 @@ export async function MatchScorecard({
   reviewHref?: string;   // where "Save & Review" lands (default: currentPath?review=1)
   cardHref?: string;     // where "Back to scorecard" from review lands (default: currentPath)
   hbhHref?: string;      // the easy tap-to-score view (hole-by-hole)
+  errorMessage?: string; // ?error= from a failed save — shown above the card
 }) {
   const supabase = createClient();
 
@@ -195,11 +214,15 @@ export async function MatchScorecard({
 
   // ── Server actions ─────────────────────────────────────────────────────────
 
+  // A failed write bounces back to the card with ?error= (see errorPath).
+  const cardPath = cardHref ?? currentPath;
+
   async function saveScores(formData: FormData) {
     "use server";
     await assertCanScore(matchupId);
     const sb = createClient();
-    await upsertHoleScores(sb, matchupId, formData);
+    const failure = await writeCard(sb, matchupId, formData);
+    if (failure) redirect(errorPath(cardPath, failure));
     await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
     revalidatePath("/matches");
@@ -210,7 +233,8 @@ export async function MatchScorecard({
     "use server";
     await assertCanScore(matchupId);
     const sb = createClient();
-    await upsertHoleScores(sb, matchupId, formData);
+    const failure = await writeCard(sb, matchupId, formData);
+    if (failure) redirect(errorPath(cardPath, failure));
     await recordScoreFeed(sb, matchupId); // best-effort
     revalidatePath(currentPath);
     revalidatePath("/matches");
@@ -224,11 +248,19 @@ export async function MatchScorecard({
     const supabase = createClient();
     const result = (formData.get("result") as string) || null;
     const score  = (formData.get("match_score") as string) || null;
-    await supabase.from("matchups").update({
+    if (!result || !["home", "away", "halve"].includes(result)) {
+      redirect(errorPath(cardPath, "Couldn't finalize: no result yet — enter scores first."));
+    }
+    // .select() so an RLS-blocked write (0 rows, no error) is caught too —
+    // otherwise the match looks final but its point never counts.
+    const { data: done, error } = await supabase.from("matchups").update({
       status:      "complete",
       result,
       match_score: score,
-    }).eq("id", matchupId);
+    }).eq("id", matchupId).select("id");
+    if (error || (done?.length ?? 0) === 0) {
+      redirect(errorPath(cardPath, `Match NOT finalized: ${error?.message ?? "not allowed to update this match"}`));
+    }
     await recordMatchFinal(supabase, matchupId, result, score); // best-effort
     revalidatePath(backHref);
     revalidatePath("/matches");
@@ -270,6 +302,8 @@ export async function MatchScorecard({
       <Link href={backHref} className="text-sm text-navy/50 hover:text-navy">
         ← {backLabel}
       </Link>
+
+      <ErrorBanner message={errorMessage} />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3">

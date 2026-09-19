@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { matchOutcome, outcomeBadge, type HoleResult } from "@/lib/matchplay";
 import type { SlotKey } from "@/lib/scoring";
@@ -63,12 +63,66 @@ export function HoleByHole({
   const [idx, setIdx] = useState(Math.min(Math.max(startIndex, 0), holes.length - 1));
   const [dir, setDir] = useState<1 | -1>(1); // last navigation direction, for the slide animation
   const [expanded, setExpanded] = useState<SlotKey | null>(null);
-  const [, startTransition] = useTransition();
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
-  // Adopt server state on realtime refreshes (a save echoes back our own value).
-  useEffect(() => { setScores(initialScores); }, [initialScores]);
+  // ── Outbox: every write this phone has made that the server hasn't
+  // confirmed. Cell service on a golf course is patchy, so a tap can fail to
+  // save; without this the score would sit on screen looking saved, then
+  // silently vanish on the next refresh. Entries stay until they land, are
+  // re-applied over every server refresh, and failures are shown + retried.
+  type Pending = { hole: number; slot: SlotKey; value: number | null; failed: boolean };
+  const outbox = useRef<Map<string, Pending>>(new Map());
+  const [failedCount, setFailedCount] = useState(0);
+  const syncFailed = () =>
+    setFailedCount(Array.from(outbox.current.values()).filter((e) => e.failed).length);
+
+  const overlay = useCallback((base: Scores): Scores => {
+    if (outbox.current.size === 0) return base;
+    const next: Scores = { ...base };
+    outbox.current.forEach((e) => {
+      next[e.hole] = { ...(next[e.hole] ?? {}), [e.slot]: e.value };
+    });
+    return next;
+  }, []);
+
+  const send = useCallback((hole: number, slot: SlotKey, value: number | null) => {
+    const key = `${hole}:${slot}`;
+    const entry: Pending = { hole, slot, value, failed: false };
+    outbox.current.set(key, entry);
+    syncFailed();
+    saveScore(hole, slot, value).then(
+      () => {
+        // Only clear if a newer tap hasn't replaced this write
+        if (outbox.current.get(key) === entry) outbox.current.delete(key);
+        syncFailed();
+      },
+      () => {
+        if (outbox.current.get(key) === entry) entry.failed = true;
+        syncFailed();
+      },
+    );
+  }, [saveScore]);
+
+  const retryFailed = useCallback(() => {
+    Array.from(outbox.current.values())
+      .filter((e) => e.failed)
+      .forEach((e) => send(e.hole, e.slot, e.value));
+  }, [send]);
+
+  // Retry when the phone finds signal again, and every 15s while anything's stuck.
+  useEffect(() => {
+    if (failedCount === 0) return;
+    window.addEventListener("online", retryFailed);
+    const t = setInterval(retryFailed, 15000);
+    return () => {
+      window.removeEventListener("online", retryFailed);
+      clearInterval(t);
+    };
+  }, [failedCount, retryFailed]);
+
+  // Adopt server state on realtime refreshes — with our unconfirmed writes on top.
+  useEffect(() => { setScores(overlay(initialScores)); }, [initialScores, overlay]);
   useEffect(() => () => { if (advanceTimer.current) clearTimeout(advanceTimer.current); }, []);
 
   const hole = holes[idx];
@@ -99,7 +153,7 @@ export function HoleByHole({
     const next: Scores = { ...scores, [h.n]: { ...(scores[h.n] ?? {}), [slot]: value } };
     setScores(next);
     setExpanded(null);
-    startTransition(() => { void saveScore(h.n, slot, value); });
+    send(h.n, slot, value);
 
     // Auto-advance once every ball on this hole has a score.
     const complete = slots.every((sl) => next[h.n]?.[sl.key] != null);
@@ -158,6 +212,19 @@ export function HoleByHole({
           Full scorecard
         </Link>
       </div>
+
+      {/* Unsaved scores — never let a dropped save look saved */}
+      {failedCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-usa-red bg-usa-red/10 px-4 py-2.5">
+          <p className="text-sm font-semibold text-usa-red">
+            ⚠ {failedCount} score{failedCount === 1 ? "" : "s"} not saved — weak signal? We&rsquo;ll keep retrying.
+          </p>
+          <button type="button" onClick={retryFailed}
+            className="shrink-0 rounded-lg bg-usa-red px-3 py-1.5 text-xs font-bold text-white">
+            Retry now
+          </button>
+        </div>
+      )}
 
       {/* Match status */}
       {badge && (

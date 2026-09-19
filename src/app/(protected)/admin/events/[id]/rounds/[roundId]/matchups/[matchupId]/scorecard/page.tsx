@@ -7,7 +7,7 @@ export default async function AdminScorecardPage({
   searchParams,
 }: {
   params: { id: string; roundId: string; matchupId: string };
-  searchParams: { review?: string };
+  searchParams: { review?: string; error?: string };
 }) {
   const player = await requirePlayer();
   if (!isAdmin(player)) redirect("/");
@@ -22,6 +22,7 @@ export default async function AdminScorecardPage({
       viewer={player}
       reviewing={searchParams.review === "1"}
       hbhHref={`/live/match/${params.matchupId}`}
+      errorMessage={searchParams.error}
     />
   );
 }

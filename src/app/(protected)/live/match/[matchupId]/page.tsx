@@ -24,7 +24,7 @@ export default async function LiveMatchPage({
   searchParams,
 }: {
   params: { matchupId: string };
-  searchParams: { review?: string; view?: string };
+  searchParams: { review?: string; view?: string; error?: string };
 }) {
   const player = await requirePlayer();
   const currentPath = `/live/match/${params.matchupId}`;
@@ -45,6 +45,7 @@ export default async function LiveMatchPage({
           reviewHref={`${currentPath}?view=card&review=1`}
           cardHref={`${currentPath}?view=card`}
           hbhHref={currentPath}
+          errorMessage={searchParams.error}
         />
       </>
     );

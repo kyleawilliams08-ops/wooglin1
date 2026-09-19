@@ -128,12 +128,16 @@ export default async function BetsPage({
     }
 
     if (winner === "push") {
-      const { error } = await supabase
+      const { data: claimed, error } = await supabase
         .from("bets")
         .update({ status: "push", closed_by: me.id, closed_at: new Date().toISOString() })
-        .eq("id", betId);
+        .eq("id", betId)
+        .in("status", ["active", "pending"])
+        .select("id");
       failTo("/bets", error);
+      if ((claimed?.length ?? 0) === 0) failTo("/bets", { message: "Someone already settled this bet" });
       revalidatePath("/bets");
+      revalidatePath("/");
       return;
     }
 
@@ -146,18 +150,31 @@ export default async function BetsPage({
     }
     if (winnerIds.length === 0) failTo("/bets", { message: "Pick a valid winner" });
 
-    for (const p of parts) {
-      const { error } = await supabase
-        .from("bet_participants")
-        .update({ is_winner: winnerIds.includes(p.player_id) })
-        .eq("id", p.id);
-      failTo("/bets", error);
-    }
-    const { error } = await supabase
+    // Claim the close atomically FIRST. Two people settling the same bet at
+    // once (each naming themselves the winner) both passed the status check
+    // above; the WHERE clause lets exactly one through, so their is_winner
+    // writes can never interleave into a bet with mixed-up winners.
+    const { data: claimed, error } = await supabase
       .from("bets")
       .update({ status: "closed", closed_by: me.id, closed_at: new Date().toISOString() })
-      .eq("id", betId);
+      .eq("id", betId)
+      .in("status", ["active", "pending"])
+      .select("id");
     failTo("/bets", error);
+    if ((claimed?.length ?? 0) === 0) failTo("/bets", { message: "Someone already settled this bet" });
+
+    const writes = await Promise.all(parts.map((p) =>
+      supabase.from("bet_participants")
+        .update({ is_winner: winnerIds.includes(p.player_id) })
+        .eq("id", p.id),
+    ));
+    const failed = writes.find((w) => w.error);
+    if (failed?.error) {
+      // Winners didn't all save — reopen rather than leave a half-settled bet.
+      await supabase.from("bets")
+        .update({ status: "active", closed_by: null, closed_at: null }).eq("id", betId);
+      failTo("/bets", { message: `Couldn't settle the bet (${failed.error.message}) — it's open again, try once more.` });
+    }
     await recordBetClosed(supabase, betId); // best-effort feed post
     revalidatePath("/bets");
     revalidatePath("/");
@@ -176,9 +193,13 @@ export default async function BetsPage({
     if (bet!.created_by !== me.id && !me.admin) {
       failTo("/bets", { message: "Only the proposer or an admin can cancel" });
     }
-    const { error } = await supabase.from("bets").update({ status: "void" }).eq("id", betId);
+    // Status in the WHERE: a cancel racing a close can't void a settled bet.
+    const { data: voided, error } = await supabase.from("bets").update({ status: "void" })
+      .eq("id", betId).in("status", ["active", "pending"]).select("id");
     failTo("/bets", error);
+    if ((voided?.length ?? 0) === 0) failTo("/bets", { message: "That bet was just settled — it can't be cancelled now" });
     revalidatePath("/bets");
+    revalidatePath("/");
   }
 
   // Losers can protest a closed bet — freezes it out of the ledger
@@ -200,7 +221,8 @@ export default async function BetsPage({
     const { error } = await supabase
       .from("bets")
       .update({ status: "protested", protested_by: me.id, protested_from: bet!.status })
-      .eq("id", betId);
+      .eq("id", betId)
+      .eq("status", bet!.status); // unchanged since we checked it
     failTo("/bets", error);
     await recordBetProtest(supabase, betId, me.label); // best-effort feed post
     revalidatePath("/bets");

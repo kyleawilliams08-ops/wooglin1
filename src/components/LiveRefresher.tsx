@@ -55,7 +55,16 @@ export function LiveRefresher({ matchupId }: { matchupId?: string }) {
       )
       .subscribe();
 
+    // A phone pulled out of a pocket has a stale page and (often) a dead
+    // socket — re-pull as soon as it's visible or back online, rather than
+    // waiting for the next realtime event that may never arrive.
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", refresh);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", refresh);
       if (debounce.current) clearTimeout(debounce.current);
       supabase.removeChannel(channel);
     };
