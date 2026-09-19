@@ -97,7 +97,11 @@ export default async function Home({
   async function signOut() {
     "use server";
     const supabase = createClient();
-    await supabase.auth.signOut();
+    // scope: "local" — sign out THIS device only. Supabase's default is
+    // "global", which revokes the player's sessions everywhere: signing out
+    // on a laptop would log their phone out mid-round, leaving them waiting
+    // on an emailed code with mountain cell service.
+    await supabase.auth.signOut({ scope: "local" });
     redirect("/login");
   }
 
