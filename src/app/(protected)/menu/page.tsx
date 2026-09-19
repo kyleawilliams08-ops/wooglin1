@@ -19,6 +19,7 @@ export default async function MenuPage() {
     { href: "/admin/courses", label: "Manage Courses", desc: "Course, tee & hole setup" },
     { href: "/admin/formats", label: "Formats",        desc: "Handicap allowances per format" },
     { href: "/admin/history", label: "Edit History",   desc: "Backfill past cup results" },
+    { href: "/admin/packet-data", label: "Packet Data", desc: "Export rosters, handicaps & tee times for the printed packet" },
     { href: "/admin/test-lab", label: "Test Lab",      desc: "Test copy of an event & view the app as any player" },
   ];
 
