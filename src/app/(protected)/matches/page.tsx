@@ -466,10 +466,10 @@ export default async function MatchesPage({
                             {st.chip}
                           </span>
                           {admin && (
-                            {/* z-20: above the z-10 lineup buttons below it (and the next
-                                card's), or the open dropdown paints underneath them and
-                                its links can't be clicked. */}
                             <span className="relative z-20 shrink-0">
+                              {/* z-20: above the z-10 lineup buttons below it (and the next
+                                  card's), or the open dropdown paints underneath them and
+                                  its links can't be clicked. */}
                               <CardMenu items={[
                                 { href: `/admin/events/${eventId}/rounds/${round.id}/matchups/${m.id}`, label: "Edit match" },
                                 { href: `/print/match/${m.id}`, label: "Print scorecard", newTab: true },
