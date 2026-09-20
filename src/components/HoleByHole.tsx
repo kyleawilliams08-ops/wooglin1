@@ -273,7 +273,6 @@ export function HoleByHole({
       <div className="space-y-3">
         {slots.map((sl) => {
           const current = scores[hole.n]?.[sl.key] ?? null;
-          const isExpanded = expanded === sl.key;
 
           const primary: { score: number; term: string }[] = [];
           for (let d = -2; d <= 3; d++) {
@@ -286,6 +285,15 @@ export function HoleByHole({
           for (let d = 4; d <= 7; d++) {
             if (hole.par + d <= 15) extras.push(hole.par + d);
           }
+          // A score from the "more" row must never be hidden: picking collapses
+          // the row, so keep it open whenever this ball's score lives there
+          // (and show any out-of-range value entered from the full card).
+          const inPrimary = current != null && primary.some((x) => x.score === current);
+          if (current != null && !inPrimary && !extras.includes(current)) {
+            extras.push(current);
+            extras.sort((a, b) => a - b);
+          }
+          const isExpanded = expanded === sl.key || (current != null && !inPrimary);
 
           return (
             <div key={sl.key} className="rounded-xl border border-hairline bg-white px-3 py-3">
