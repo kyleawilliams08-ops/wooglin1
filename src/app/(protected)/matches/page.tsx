@@ -7,6 +7,8 @@ import { CardMenu } from "@/components/CardMenu";
 import { StartLineupDraftButton } from "@/components/StartLineupDraftButton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { CtpClaimButton } from "@/components/CtpClaimButton";
+import { ConfirmForm } from "@/components/ConfirmForm";
+import { postCtpToLedger } from "@/lib/ctpActions";
 import { computePlayingHcps, computeHoleResults, effectiveFormat, type GrossScores } from "@/lib/matchcalc";
 import { matchOutcome } from "@/lib/matchplay";
 
@@ -103,12 +105,12 @@ export default async function MatchesPage({
   const { data: ctpRaw } = rounds.length > 0
     ? await supabase
         .from("ctp_holes")
-        .select("id, round_id, hole_number, stake, holder:event_participants(display_name, players(nickname))")
+        .select("id, round_id, hole_number, stake, bet_id, holder:event_participants(display_name, players(nickname))")
         .in("round_id", rounds.map((r) => r.id))
         .order("hole_number")
     : { data: [] };
   const ctpHoles = (ctpRaw ?? []) as unknown as {
-    id: string; round_id: string; hole_number: number; stake: number | null;
+    id: string; round_id: string; hole_number: number; stake: number | null; bet_id: string | null;
     holder: { display_name: string; players: { nickname: string | null } | null } | null;
   }[];
   // Claim chains ("JC → Shoops → Kyle") for the CTP strips
@@ -542,9 +544,28 @@ export default async function MatchesPage({
                           <span className="text-navy/50"> — unclaimed</span>
                         )}
                       </p>
-                      {viewerInField && !roundDone && (
-                        <CtpClaimButton ctpId={c.id} holeNumber={c.hole_number} />
-                      )}
+                      <div className="flex shrink-0 items-center gap-2">
+                        {c.bet_id && (
+                          <span className="rounded-full bg-europe-green/15 px-2 py-0.5 text-[10px] font-bold text-europe-green">
+                            ✓ Posted
+                          </span>
+                        )}
+                        {/* Commissioner: settle the pot straight from here */}
+                        {admin && !c.bet_id && c.stake != null && holderName && (
+                          <ConfirmForm action={postCtpToLedger}
+                            confirm={`Post CTP #${c.hole_number} to the ledger? ${holderName} collects $${Number(c.stake)} from everyone in this round. This can't be re-posted.`}>
+                            <input type="hidden" name="ctp_id" value={c.id} />
+                            <input type="hidden" name="return_to" value={`/matches?round=${round.id}`} />
+                            <button type="submit"
+                              className="rounded-full bg-europe-green px-2.5 py-1 text-[11px] font-bold text-white">
+                              💰 Post
+                            </button>
+                          </ConfirmForm>
+                        )}
+                        {viewerInField && !roundDone && !c.bet_id && (
+                          <CtpClaimButton ctpId={c.id} holeNumber={c.hole_number} />
+                        )}
+                      </div>
                       </div>
                       {chain.length > 1 && (
                         <p className="truncate text-[11px] text-navy/45">
