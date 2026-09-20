@@ -89,17 +89,18 @@ function fmtPts(n: number): string {
   return String(n);
 }
 
+interface FightPlayer { name: string; avatarUrl: string | null; strokes: number | null }
 interface FightData {
   matchNumber: number;
   homeName: string; awayName: string;
   homeColor: string; awayColor: string;
-  homePlayers: { name: string; strokes: number | null }[];
-  awayPlayers: { name: string; strokes: number | null }[];
+  homePlayers: FightPlayer[];
+  awayPlayers: FightPlayer[];
   headline: string;
 }
 interface RevealData {
   teamName: string; teamColor: string;
-  names: string[];
+  players: { name: string; avatarUrl: string | null }[];
   fight: FightData | null;
 }
 type Phase = "pickin" | "reveal" | "fight" | null;
@@ -214,10 +215,12 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
       const homeStrokes = s ? (s.oneScore ? [s.homeTeam] : [s.home.p1, s.home.p2]) : [];
       const awayStrokes = s ? (s.oneScore ? [s.awayTeam] : [s.away.p1, s.away.p2]) : [];
       const homePlayers = [m.home.p1, m.home.p2].filter(Boolean).map((p, i) => ({
-        name: label(p as SidePlayer), strokes: s?.oneScore ? null : (homeStrokes[i] ?? null),
+        name: label(p as SidePlayer), avatarUrl: (p as SidePlayer).avatarUrl,
+        strokes: s?.oneScore ? null : (homeStrokes[i] ?? null),
       }));
       const awayPlayers = [m.away.p1, m.away.p2].filter(Boolean).map((p, i) => ({
-        name: label(p as SidePlayer), strokes: s?.oneScore ? null : (awayStrokes[i] ?? null),
+        name: label(p as SidePlayer), avatarUrl: (p as SidePlayer).avatarUrl,
+        strokes: s?.oneScore ? null : (awayStrokes[i] ?? null),
       }));
       fight = {
         matchNumber: m.matchNumber,
@@ -228,7 +231,13 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
           [...homePlayers, ...awayPlayers]),
       };
     }
-    return { teamName: team.name, teamColor: team.color, names: tv ? pick.fullNames : pick.names, fight };
+    // The picked side's players (with photos) straight off the matchup; fall
+    // back to the pick's bare names if the board hasn't caught up yet.
+    const sidePlayers = m ? ([m[pick.side].p1, m[pick.side].p2].filter(Boolean) as SidePlayer[]) : [];
+    const players = sidePlayers.length > 0
+      ? sidePlayers.map((p) => ({ name: label(p), avatarUrl: p.avatarUrl }))
+      : (tv ? pick.fullNames : pick.names).map((name) => ({ name, avatarUrl: null }));
+    return { teamName: team.name, teamColor: team.color, players, fight };
   };
 
   useEffect(() => {
@@ -311,16 +320,21 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
       )}
       {phase === "reveal" && (
         <div className="text-center">
-          <div className="flex items-center justify-center gap-6">
-            {reveal.names.map((n, i) => (
-              <p key={n} className="draft-reveal-name font-display font-bold text-white"
-                style={{ animationDelay: `${i * 700}ms`, fontSize: tv ? "5rem" : "2.75rem" }}>
-                {n}
-              </p>
+          <div className={`flex items-start justify-center ${tv ? "gap-16" : "gap-6"}`}>
+            {reveal.players.map((pl, i) => (
+              <div key={pl.name} className="draft-reveal-name flex flex-col items-center"
+                style={{ animationDelay: `${i * 700}ms` }}>
+                <Avatar url={pl.avatarUrl} name={pl.name} color="#0C2D55"
+                  className={`${tv ? "h-52 w-52 text-6xl" : "h-24 w-24 text-3xl"} shrink-0 ring-4 ring-gold shadow-2xl`} />
+                <p className="mt-4 font-display font-bold leading-tight text-white"
+                  style={{ fontSize: tv ? "4.25rem" : "2rem" }}>
+                  {pl.name}
+                </p>
+              </div>
             ))}
           </div>
           <p className="draft-reveal-name mt-4 font-semibold uppercase tracking-[0.3em] text-gold"
-            style={{ animationDelay: `${reveal.names.length * 700 + 200}ms`, fontSize: tv ? "1.75rem" : "0.95rem" }}>
+            style={{ animationDelay: `${reveal.players.length * 700 + 200}ms`, fontSize: tv ? "1.75rem" : "0.95rem" }}>
             {reveal.teamName}
           </p>
         </div>
@@ -651,18 +665,23 @@ export function LineupDraftRoom({ draft, tv }: { draft: LineupDraftView; tv: boo
 }
 
 function FightCard({ fight, tv }: { fight: FightData; tv: boolean }) {
-  const sideCol = (name: string, color: string, players: { name: string; strokes: number | null }[], align: "left" | "right") => (
-    <div className={`flex-1 rounded-2xl p-5 ${align === "right" ? "text-right" : "text-left"}`} style={{ backgroundColor: color }}>
+  const sideCol = (name: string, color: string, players: FightPlayer[], align: "left" | "right") => (
+    <div className={`min-w-0 flex-1 rounded-2xl ${tv ? "p-6" : "p-4"} ${align === "right" ? "text-right" : "text-left"}`} style={{ backgroundColor: color }}>
       <p className={`font-semibold uppercase tracking-widest text-white/70 ${tv ? "text-lg" : "text-xs"}`}>{name}</p>
       {players.map((p) => (
-        <p key={p.name} className={`mt-1 font-display font-bold text-white ${tv ? "text-4xl" : "text-2xl"}`}>
-          {p.name}
-          {p.strokes != null && p.strokes > 0 && (
-            <span className={`ml-2 rounded-full bg-gold px-2 py-0.5 align-middle font-sans font-bold text-navy ${tv ? "text-xl" : "text-xs"}`}>
-              +{p.strokes}
-            </span>
-          )}
-        </p>
+        <div key={p.name}
+          className={`flex items-center ${tv ? "mt-3 gap-4" : "mt-2 gap-2.5"} ${align === "right" ? "flex-row-reverse" : ""}`}>
+          <Avatar url={p.avatarUrl} name={p.name} color="#0C2D55"
+            className={`${tv ? "h-20 w-20 text-2xl" : "h-11 w-11 text-sm"} shrink-0 ring-2 ring-gold`} />
+          <p className={`min-w-0 font-display font-bold leading-tight text-white ${tv ? "text-4xl" : "text-xl"}`}>
+            {p.name}
+            {p.strokes != null && p.strokes > 0 && (
+              <span className={`ml-2 inline-block rounded-full bg-gold px-2 py-0.5 align-middle font-sans font-bold text-navy ${tv ? "text-xl" : "text-xs"}`}>
+                +{p.strokes}
+              </span>
+            )}
+          </p>
+        </div>
       ))}
     </div>
   );
