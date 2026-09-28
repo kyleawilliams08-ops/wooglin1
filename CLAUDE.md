@@ -104,7 +104,7 @@ ctp_claims(id, ctp_id, participant_id, claimed_by, created_at)  -- claim-chain h
 
 ## Expenses
 
-`expenses(id, event_id, paid_by, description, amount, split_kind[all/usa/europe/custom], created_by)` + `expense_shares(expense_id, player_id)`. The split is **snapshotted** as explicit share rows at entry ("All" = every linked participant that moment), so roster edits never move money. `/expenses` (Menu, all members): wizard at `/expenses/new` (`ExpenseWizard`, reuses `PlayerGrid` from BetWizard: who paid → amount → what → All/USA/Europe/Custom → pick people, custom starts with nobody selected (All/None shortcuts at the top)), list, per-person breakout (`lib/expenses.ts` `expenseTotals`: spent/owe/net, tested), delete by payer/creator/admin. Admin-only CSV exports (itemized + per-person) shaped like the commissioner's sheet, built client-side. Event-scoped via `getCurrentEvent()`.
+`expenses(id, event_id, paid_by, description, amount, split_kind[all/usa/europe/custom], created_by)` + `expense_shares(expense_id, player_id)`. The split is **snapshotted** as explicit share rows at entry ("All" = every linked participant that moment), so roster edits never move money. `/expenses` (Menu, all members): wizard at `/expenses/new` (`ExpenseWizard`, reuses `PlayerGrid` from BetWizard: who paid → amount → what → All/USA/Europe/Custom → pick people, custom starts with just the logged-in user selected (All/None shortcuts at the top)), list, per-person breakout (`lib/expenses.ts` `expenseTotals`: spent/owe/net, tested), delete by payer/creator/admin. Admin-only CSV exports (itemized + per-person) shaped like the commissioner's sheet, built client-side. Event-scoped via `getCurrentEvent()`.
 
 ## Clubhouse feed
 

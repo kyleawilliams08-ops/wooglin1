@@ -30,7 +30,7 @@ export function ExpenseWizard({
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [kind, setKind] = useState<SplitKind | null>(null);
-  const [people, setPeople] = useState<string[]>([]); // custom starts empty — tap who's in
+  const [people, setPeople] = useState<string[]>([me]); // custom starts with just you — tap who else is in
   const [isPending, startTransition] = useTransition();
 
   const steps: Step[] = kind === "custom"
