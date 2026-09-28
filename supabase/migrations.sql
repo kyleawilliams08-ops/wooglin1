@@ -1532,3 +1532,45 @@ alter table matchups
 -- remove a real event.
 alter table events
   add column if not exists is_test boolean not null default false;
+
+-- ============================================================================
+-- EXPENSES — who paid what, split among whom (replaces the post-trip sheet)
+-- ============================================================================
+-- An expense is: who paid, what, how much, and the people it's split between.
+-- The split is SNAPSHOTTED as explicit rows in expense_shares at entry time
+-- ("All" = everyone on the trip that day), so later roster edits can't change
+-- history. split_kind is just the label the wizard used (All / USA / Europe /
+-- Custom). Friends-app trust model: any member can add; edits/deletes are
+-- gated in the server actions (payer, creator or admin).
+create table if not exists expenses (
+  id           uuid primary key default gen_random_uuid(),
+  event_id     uuid not null references events(id) on delete cascade,
+  paid_by      uuid not null references players(id) on delete cascade,
+  description  text not null,
+  amount       numeric(10,2) not null check (amount > 0),
+  split_kind   text not null check (split_kind in ('all','usa','europe','custom')),
+  created_by   uuid references players(id) on delete set null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists expenses_event_idx on expenses(event_id, created_at);
+
+create table if not exists expense_shares (
+  expense_id  uuid not null references expenses(id) on delete cascade,
+  player_id   uuid not null references players(id) on delete cascade,
+  primary key (expense_id, player_id)
+);
+
+alter table expenses enable row level security;
+alter table expense_shares enable row level security;
+drop policy if exists "authenticated users can read expenses" on expenses;
+drop policy if exists "authenticated users can write expenses" on expenses;
+drop policy if exists "authenticated users can read expense shares" on expense_shares;
+drop policy if exists "authenticated users can write expense shares" on expense_shares;
+create policy "authenticated users can read expenses"
+  on expenses for select to authenticated using (true);
+create policy "authenticated users can write expenses"
+  on expenses for all to authenticated using (true) with check (true);
+create policy "authenticated users can read expense shares"
+  on expense_shares for select to authenticated using (true);
+create policy "authenticated users can write expense shares"
+  on expense_shares for all to authenticated using (true) with check (true);

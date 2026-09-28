@@ -24,8 +24,8 @@ function initials(label: string) {
   return label.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
-/** Alphabetical tappable player cards with a search box. */
-function PlayerGrid({
+/** Alphabetical tappable player cards with a search box. (Shared with the expense wizard.) */
+export function PlayerGrid({
   options,
   selected,
   onTap,
