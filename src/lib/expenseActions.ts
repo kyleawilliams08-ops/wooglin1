@@ -31,6 +31,8 @@ export async function createExpense(formData: FormData): Promise<void> {
   const event = await getCurrentEvent(supabase);
   if (!event) { failTo(LIST, { message: "No active event." }); return; }
 
+  const { data: ev } = await supabase.from("events").select("books_closed_at").eq("id", event.id).single();
+  if (ev?.books_closed_at) { failTo(LIST, { message: "The books are closed for this year — ask the commissioner to reopen them." }); return; }
   const paidBy = (formData.get("paid_by") as string) || me.id;
   const amount = Math.round(parseFloat(formData.get("amount") as string) * 100) / 100;
   const description = ((formData.get("description") as string) || "").trim();
@@ -80,6 +82,40 @@ export async function deleteExpense(formData: FormData): Promise<void> {
     return;
   }
   const { error } = await supabase.from("expenses").delete().eq("id", id);
+  failTo(LIST, error);
+  revalidatePath(LIST);
+  redirect(`${LIST}?saved=1`);
+}
+
+// ── Settle up (admin) ──────────────────────────────────────────────────────
+
+/** Toggle a person's Paid mark for the current event. */
+export async function togglePaid(formData: FormData): Promise<void> {
+  const me = await requirePlayer();
+  if (!isAdmin(me)) { failTo(LIST, { message: "Admins only." }); return; }
+  const supabase = createClient();
+  const event = await getCurrentEvent(supabase);
+  if (!event) { failTo(LIST, { message: "No active event." }); return; }
+  const playerId = formData.get("player_id") as string;
+  const paid = formData.get("paid") === "1";
+  const { error } = paid
+    ? await supabase.from("event_settlements").upsert({ event_id: event.id, player_id: playerId, marked_by: me.id })
+    : await supabase.from("event_settlements").delete().eq("event_id", event.id).eq("player_id", playerId);
+  failTo(LIST, error);
+  revalidatePath(LIST);
+  redirect(`${LIST}?saved=1`);
+}
+
+/** Close (or reopen) the books: stamps the event; closed = no new expenses. */
+export async function setBooksClosed(formData: FormData): Promise<void> {
+  const me = await requirePlayer();
+  if (!isAdmin(me)) { failTo(LIST, { message: "Admins only." }); return; }
+  const supabase = createClient();
+  const event = await getCurrentEvent(supabase);
+  if (!event) { failTo(LIST, { message: "No active event." }); return; }
+  const close = formData.get("close") === "1";
+  const { error } = await supabase.from("events")
+    .update({ books_closed_at: close ? new Date().toISOString() : null }).eq("id", event.id);
   failTo(LIST, error);
   revalidatePath(LIST);
   redirect(`${LIST}?saved=1`);

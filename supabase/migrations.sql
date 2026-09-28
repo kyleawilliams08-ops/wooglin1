@@ -1574,3 +1574,27 @@ create policy "authenticated users can read expense shares"
   on expense_shares for select to authenticated using (true);
 create policy "authenticated users can write expense shares"
   on expense_shares for all to authenticated using (true) with check (true);
+
+-- ============================================================================
+-- SETTLE UP — who's paid the house, and closing the books for the year
+-- ============================================================================
+-- House balance per person = expense net + betting net (the sheet's last
+-- column). Admins mark each person Paid as money comes in; when everyone's
+-- square, "Close the books" stamps the event, which hides Add-an-expense and
+-- freezes the numbers. Next year's event starts fresh on its own.
+create table if not exists event_settlements (
+  event_id   uuid not null references events(id) on delete cascade,
+  player_id  uuid not null references players(id) on delete cascade,
+  paid_at    timestamptz not null default now(),
+  marked_by  uuid references players(id) on delete set null,
+  primary key (event_id, player_id)
+);
+alter table event_settlements enable row level security;
+drop policy if exists "authenticated users can read settlements" on event_settlements;
+drop policy if exists "authenticated users can write settlements" on event_settlements;
+create policy "authenticated users can read settlements"
+  on event_settlements for select to authenticated using (true);
+create policy "authenticated users can write settlements"
+  on event_settlements for all to authenticated using (true) with check (true);
+
+alter table events add column if not exists books_closed_at timestamptz;
